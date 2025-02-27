@@ -61,8 +61,8 @@ export default function ChatInterface({ userId }: ChatInterfaceProps) {
       userId,
       content: input.trim(),
       role: "user",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: new Date(),
+      updatedAt: new Date()
     }
     
     setMessages(prev => [...prev, userMessage])
@@ -108,8 +108,8 @@ export default function ChatInterface({ userId }: ChatInterfaceProps) {
           userId,
           content: aiResponseResult.response,
           role: "assistant",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          createdAt: new Date(),
+          updatedAt: new Date()
         }
         
         setMessages(prev => [...prev, aiMessage])

@@ -1,66 +1,65 @@
-# Mckay's App Template
+# Voice Journal App
 
-This is a full-stack app template for courses on [Takeoff](https://JoinTakeoff.com/).
+A mobile web app for voice journaling with AI-powered features.
 
-## Sponsors
+## Features
 
-If you are interested in sponsoring my repos, please contact me at [ads@takeoffai.org](mailto:ads@takeoffai.org).
-
-Or sponsor me directly on [GitHub Sponsors](https://github.com/sponsors/mckaywrigley).
+- **Voice Notes**: Record voice notes that are automatically transcribed using DeepGram API
+- **Chat with Notes**: Ask questions about your recorded notes and get AI-powered responses based on your journal content
+- **Mobile-Friendly**: Designed for optimal experience on mobile devices
+- **Secure Authentication**: User authentication with Clerk
 
 ## Tech Stack
 
-- IDE: [Cursor](https://www.cursor.com/)
-- AI Tools: [V0](https://v0.dev/), [Perplexity](https://www.perplexity.com/)
-- Frontend: [Next.js](https://nextjs.org/docs), [Tailwind](https://tailwindcss.com/docs/guides/nextjs), [Shadcn](https://ui.shadcn.com/docs/installation), [Framer Motion](https://www.framer.com/motion/introduction/)
-- Backend: [PostgreSQL](https://www.postgresql.org/about/), [Supabase](https://supabase.com/), [Drizzle](https://orm.drizzle.team/docs/get-started-postgresql), [Server Actions](https://nextjs.org/docs/app/building-your-application/data-fetching/server-actions-and-mutations)
-- Auth: [Clerk](https://clerk.com/)
-- Payments: [Stripe](https://stripe.com/)
-- Analytics: [PostHog](https://posthog.com/)
+- **Frontend**: Next.js, Tailwind CSS, Shadcn UI, Framer Motion
+- **Backend**: Server Actions, Postgres, Supabase, Drizzle ORM
+- **Authentication**: Clerk
+- **APIs**: DeepGram (transcription), OpenAI (chat)
 
-## Prerequisites
+## Getting Started
 
-You will need accounts for the following services.
+### Prerequisites
 
-They all have free plans that you can use to get started.
+- Node.js 18+ and npm
+- Postgres database
+- Clerk account
+- DeepGram API key
+- OpenAI API key
 
-- Create a [Cursor](https://www.cursor.com/) account
-- Create a [GitHub](https://github.com/) account
-- Create a [Supabase](https://supabase.com/) account
-- Create a [Clerk](https://clerk.com/) account
-- Create a [Stripe](https://stripe.com/) account
-- Create a [PostHog](https://posthog.com/) account
-- Create a [Vercel](https://vercel.com/) account
-
-You will likely not need paid plans unless you are building a business.
-
-## Environment Variables
-
-```bash
-# DB (Supabase)
-DATABASE_URL=
-
-# Auth (Clerk)
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
-CLERK_SECRET_KEY=
-NEXT_PUBLIC_CLERK_SIGN_IN_URL=/login
-NEXT_PUBLIC_CLERK_SIGN_UP_URL=/signup
-
-# Payments (Stripe)
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-NEXT_PUBLIC_STRIPE_PORTAL_LINK=
-NEXT_PUBLIC_STRIPE_PAYMENT_LINK_YEARLY=
-NEXT_PUBLIC_STRIPE_PAYMENT_LINK_MONTHLY=
-
-# Analytics (PostHog)
-NEXT_PUBLIC_POSTHOG_KEY=
-NEXT_PUBLIC_POSTHOG_HOST=
-```
-
-## Setup
+### Installation
 
 1. Clone the repository
-2. Copy `.env.example` to `.env.local` and fill in the environment variables from above
-3. Run `npm install` to install dependencies
-4. Run `npm run dev` to run the app locally
+```bash
+git clone <repository-url>
+cd voice-journal-app
+```
+
+2. Install dependencies
+```bash
+npm install
+```
+
+3. Set up environment variables
+   - Create a `.env.local` file based on `.env.example`
+   - Fill in your API keys and database credentials
+
+4. Run the development server
+```bash
+npm run dev
+```
+
+## Usage
+
+1. Sign in with your account
+2. Navigate to the Journal page
+3. Record voice notes using the Notes tab
+4. Chat with your notes using the Chat tab
+
+## Database Schema
+
+- **voice_notes**: Stores voice recordings and their transcriptions
+- **chat_messages**: Stores chat history between user and AI
+
+## License
+
+[MIT](LICENSE)

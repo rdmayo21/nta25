@@ -9,11 +9,11 @@ import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import { schema } from "./schema"
 
-config({ path: ".env.local" })
+config({ path: ".env" })
 
 // Add better error handling for the database connection
 if (!process.env.DATABASE_URL) {
-  console.error("DATABASE_URL is not defined in .env.local")
+  console.error("DATABASE_URL is not defined in .env")
 }
 
 // Type for the connection

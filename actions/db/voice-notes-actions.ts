@@ -4,6 +4,7 @@ import { db } from "@/db/db"
 import { InsertVoiceNote, SelectVoiceNote, voiceNotesTable } from "@/db/schema"
 import { ActionState } from "@/types"
 import { eq, desc } from "drizzle-orm"
+import { auth } from "@clerk/nextjs/server"
 
 export async function createVoiceNoteAction(
   voiceNote: InsertVoiceNote
@@ -104,5 +105,44 @@ export async function deleteVoiceNoteAction(
   } catch (error) {
     console.error("Error deleting voice note:", error)
     return { isSuccess: false, message: "Failed to delete voice note" }
+  }
+}
+
+export async function saveVoiceNoteAction(data: {
+  content: string
+  // other fields
+}): Promise<ActionState<any>> {
+  try {
+    const { userId } = await auth();
+    
+    if (!userId) {
+      console.error("No user ID found in auth context");
+      return { isSuccess: false, message: "Authentication required" };
+    }
+    
+    console.log("Saving voice note for user:", userId);
+    console.log("Voice note content:", data.content);
+    
+    const [newNote] = await db.insert(voiceNotesTable)
+      .values({
+        userId,
+        content: data.content,
+        // other fields
+      })
+      .returning();
+      
+    console.log("Saved voice note:", newNote);
+    
+    return {
+      isSuccess: true,
+      message: "Voice note saved successfully",
+      data: newNote
+    };
+  } catch (error) {
+    console.error("Error saving voice note:", error);
+    return { 
+      isSuccess: false, 
+      message: `Failed to save voice note: ${error instanceof Error ? error.message : String(error)}` 
+    };
   }
 } 

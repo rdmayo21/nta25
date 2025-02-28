@@ -109,9 +109,11 @@ export async function deleteVoiceNoteAction(
 }
 
 export async function saveVoiceNoteAction(data: {
-  content: string
+  content: string,
+  title?: string,
+  audioUrl?: string
   // other fields
-}): Promise<ActionState<any>> {
+}): Promise<ActionState<SelectVoiceNote>> {
   try {
     const { userId } = await auth();
     
@@ -126,8 +128,9 @@ export async function saveVoiceNoteAction(data: {
     const [newNote] = await db.insert(voiceNotesTable)
       .values({
         userId,
-        content: data.content,
-        // other fields
+        transcription: data.content,
+        title: data.title || "Untitled Voice Note",
+        audioUrl: data.audioUrl || "",
       })
       .returning();
       

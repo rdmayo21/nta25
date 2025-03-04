@@ -6,6 +6,7 @@ import { ActionState } from "@/types"
 import { eq, desc } from "drizzle-orm"
 import { auth } from "@clerk/nextjs/server"
 import { extractKeyInsightAction } from "@/actions/api-actions"
+import { analyzeThemesAction } from "@/actions/api-actions"
 
 export async function createVoiceNoteAction(
   voiceNote: InsertVoiceNote
@@ -251,6 +252,46 @@ export async function generateInsightsForExistingNotesAction(
     return { 
       isSuccess: false, 
       message: `Failed to generate insights: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}
+
+export async function analyzeVoiceNoteThemesAction(
+  userId: string
+): Promise<ActionState<Array<{ theme: string; description: string; noteCount: number }>>> {
+  try {
+    // Get all the user's voice notes
+    const { isSuccess, data: notes, message } = await getVoiceNotesAction(userId);
+    
+    if (!isSuccess || !notes || notes.length === 0) {
+      return { 
+        isSuccess: false, 
+        message: notes && notes.length === 0 
+          ? "No voice notes found to analyze" 
+          : `Failed to retrieve notes: ${message}` 
+      };
+    }
+    
+    // Extract transcriptions from the notes
+    const transcriptions = notes.map(note => note.transcription);
+    
+    // Use the OpenAI API to analyze themes
+    const { isSuccess: analysisSuccess, themes, message: analysisMessage } = await analyzeThemesAction(transcriptions);
+    
+    if (!analysisSuccess || !themes) {
+      return { isSuccess: false, message: `Failed to analyze themes: ${analysisMessage}` };
+    }
+    
+    return {
+      isSuccess: true,
+      message: "Themes analyzed successfully",
+      data: themes
+    };
+  } catch (error) {
+    console.error("Error analyzing voice note themes:", error);
+    return { 
+      isSuccess: false, 
+      message: `Failed to analyze themes: ${error instanceof Error ? error.message : String(error)}`
     };
   }
 } 

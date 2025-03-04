@@ -264,4 +264,112 @@ export async function extractKeyInsightAction(
       message: `Failed to extract insight: ${error instanceof Error ? error.message : String(error)}` 
     }
   }
+}
+
+// Analyze themes across voice notes
+export async function analyzeThemesAction(
+  transcriptions: string[]
+): Promise<{
+  isSuccess: boolean;
+  themes?: Array<{ theme: string; description: string; noteCount: number }>;
+  message: string;
+}> {
+  try {
+    // Validate input
+    if (!transcriptions || transcriptions.length === 0) {
+      return {
+        isSuccess: false,
+        message: "Cannot analyze themes from empty transcriptions"
+      };
+    }
+
+    // Check if API key is available
+    if (!process.env.OPENAI_API_KEY) {
+      console.error("OPENAI_API_KEY is not set in environment variables");
+      return {
+        isSuccess: false,
+        message: "OpenAI API key is not configured"
+      };
+    }
+
+    // Create a context that contains all the transcriptions
+    const notesContext = transcriptions
+      .map((text, index) => `Note ${index + 1}: ${text}`)
+      .join("\n\n");
+
+    const messages: LLMChatMessage[] = [
+      {
+        role: "system",
+        content: "You analyze personal voice notes to identify recurring themes, patterns, and trends. Your goal is to surface insights that might not be apparent to the user. Focus on identifying 3-7 key themes depending on the content volume and diversity. For each theme, provide a short descriptive name (2-4 words), a brief explanation (1-2 sentences), and the approximate number of notes that relate to this theme. Format your response as a JSON array of objects with 'theme', 'description', and 'noteCount' properties. Be insightful, specific, and concise."
+      },
+      {
+        role: "user",
+        content: `Analyze these voice notes and identify the key themes and patterns across them. Return your analysis as a JSON array of theme objects:\n\n${notesContext}`
+      }
+    ];
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini", // Using the mini model for efficiency and cost
+        messages,
+        temperature: 0.3, // Lower temperature for more focused responses
+        max_tokens: 1000,
+        response_format: { type: "json_object" }
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error(`OpenAI API error (${response.status}): ${errorData}`);
+      throw new Error(`OpenAI API error: ${response.statusText} (${response.status})`);
+    }
+
+    const data = await response.json();
+
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      console.error("Unexpected API response format:", data);
+      throw new Error("Invalid response format from OpenAI API");
+    }
+
+    let analysisContent = data.choices[0].message.content.trim();
+    let themes;
+
+    try {
+      // Parse the JSON response
+      const parsedContent = JSON.parse(analysisContent);
+      themes = parsedContent.themes || [];
+
+      // Ensure the expected format
+      if (!Array.isArray(themes)) {
+        themes = []; // Reset if not an array
+      }
+
+      // Normalize the data structure if needed
+      themes = themes.map(theme => ({
+        theme: theme.theme || "Unnamed Theme",
+        description: theme.description || "No description available",
+        noteCount: theme.noteCount || 0
+      }));
+    } catch (parseError) {
+      console.error("Error parsing themes analysis:", parseError);
+      throw new Error("Failed to parse themes analysis");
+    }
+
+    return {
+      isSuccess: true,
+      themes,
+      message: "Themes analyzed successfully"
+    };
+  } catch (error) {
+    console.error("Error analyzing themes:", error);
+    return {
+      isSuccess: false,
+      message: `Failed to analyze themes: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
 } 

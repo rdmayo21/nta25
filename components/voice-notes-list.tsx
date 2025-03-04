@@ -170,7 +170,16 @@ export default function VoiceNotesList({ userId, onSelect }: VoiceNotesListProps
               className="line-clamp-3 text-sm text-muted-foreground cursor-pointer"
               onClick={() => onSelect?.(note)}
             >
-              {truncateText(note.transcription)}
+              {note.keyInsight ? (
+                <>
+                  <span className="font-medium text-xs text-primary">
+                    Key:
+                  </span>{" "}
+                  {truncateText(note.keyInsight, 120)}
+                </>
+              ) : (
+                truncateText(note.transcription)
+              )}
             </div>
           </CardContent>
         </Card>

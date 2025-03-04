@@ -6,6 +6,7 @@ export const voiceNotesTable = pgTable("voice_notes", {
   title: text("title").notNull(),
   audioUrl: text("audio_url").notNull(), // URL to the stored audio file
   transcription: text("transcription").notNull(), // Transcribed text from DeepGram
+  keyInsight: text("key_insight"), // Key insight extracted from the transcription
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

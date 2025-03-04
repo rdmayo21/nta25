@@ -5,14 +5,34 @@ import { InsertVoiceNote, SelectVoiceNote, voiceNotesTable } from "@/db/schema"
 import { ActionState } from "@/types"
 import { eq, desc } from "drizzle-orm"
 import { auth } from "@clerk/nextjs/server"
+import { extractKeyInsightAction } from "@/actions/api-actions"
 
 export async function createVoiceNoteAction(
   voiceNote: InsertVoiceNote
 ): Promise<ActionState<SelectVoiceNote>> {
   try {
+    // Extract key insight if transcription is available
+    let keyInsight = undefined;
+    
+    if (voiceNote.transcription) {
+      try {
+        const insightResult = await extractKeyInsightAction(voiceNote.transcription);
+        if (insightResult.isSuccess && insightResult.insight) {
+          keyInsight = insightResult.insight;
+        } else {
+          console.log(`Could not generate insight: ${insightResult.message}`);
+        }
+      } catch (insightError) {
+        console.error("Error generating insight (continuing anyway):", insightError);
+      }
+    }
+    
     const [newVoiceNote] = await db
       .insert(voiceNotesTable)
-      .values(voiceNote)
+      .values({
+        ...voiceNote,
+        keyInsight
+      })
       .returning()
     
     return {
@@ -22,7 +42,10 @@ export async function createVoiceNoteAction(
     }
   } catch (error) {
     console.error("Error creating voice note:", error)
-    return { isSuccess: false, message: "Failed to create voice note" }
+    return { 
+      isSuccess: false, 
+      message: `Failed to create voice note: ${error instanceof Error ? error.message : String(error)}` 
+    }
   }
 }
 
@@ -123,18 +146,51 @@ export async function saveVoiceNoteAction(data: {
     }
     
     console.log("Saving voice note for user:", userId);
-    console.log("Voice note content:", data.content);
+    
+    if (!data.content) {
+      return { isSuccess: false, message: "Voice note content is required" };
+    }
+    
+    console.log("Voice note content length:", data.content.length);
+    
+    // Extract key insight
+    let keyInsight = undefined;
+    
+    try {
+      const insightResult = await extractKeyInsightAction(data.content);
+      if (insightResult.isSuccess && insightResult.insight) {
+        keyInsight = insightResult.insight;
+        console.log("Generated insight:", keyInsight);
+      } else {
+        console.log("Could not generate insight:", insightResult.message);
+      }
+    } catch (insightError) {
+      console.error("Error extracting insight (continuing anyway):", insightError);
+    }
+    
+    // Make sure we have all required fields
+    const noteData = {
+      userId,
+      transcription: data.content,
+      title: data.title || "Untitled Voice Note",
+      audioUrl: data.audioUrl || "",
+      keyInsight
+    };
+    
+    console.log("Saving note with data:", {
+      ...noteData,
+      transcription: noteData.transcription.substring(0, 50) + "..." // Log only beginning for brevity
+    });
     
     const [newNote] = await db.insert(voiceNotesTable)
-      .values({
-        userId,
-        transcription: data.content,
-        title: data.title || "Untitled Voice Note",
-        audioUrl: data.audioUrl || "",
-      })
+      .values(noteData)
       .returning();
       
-    console.log("Saved voice note:", newNote);
+    console.log("Saved voice note:", {
+      id: newNote.id,
+      title: newNote.title,
+      hasKeyInsight: !!newNote.keyInsight
+    });
     
     return {
       isSuccess: true,
@@ -146,6 +202,55 @@ export async function saveVoiceNoteAction(data: {
     return { 
       isSuccess: false, 
       message: `Failed to save voice note: ${error instanceof Error ? error.message : String(error)}` 
+    };
+  }
+}
+
+export async function generateInsightsForExistingNotesAction(
+  userId: string
+): Promise<ActionState<number>> {
+  try {
+    const { isSuccess, data: notes, message } = await getVoiceNotesAction(userId);
+    
+    if (!isSuccess || !notes) {
+      return { isSuccess: false, message: `Failed to retrieve notes: ${message}` };
+    }
+    
+    const notesWithoutInsights = notes.filter(note => !note.keyInsight);
+    
+    if (notesWithoutInsights.length === 0) {
+      return { isSuccess: true, message: "No notes without insights found", data: 0 };
+    }
+    
+    let updatedCount = 0;
+    
+    for (const note of notesWithoutInsights) {
+      try {
+        const insightResult = await extractKeyInsightAction(note.transcription);
+        
+        if (insightResult.isSuccess && insightResult.insight) {
+          await db.update(voiceNotesTable)
+            .set({ keyInsight: insightResult.insight })
+            .where(eq(voiceNotesTable.id, note.id))
+          
+          updatedCount++;
+        }
+      } catch (error) {
+        console.error(`Error generating insight for note ${note.id}:`, error);
+        // Continue with the next note
+      }
+    }
+    
+    return {
+      isSuccess: true,
+      message: `Generated insights for ${updatedCount} existing notes`,
+      data: updatedCount
+    };
+  } catch (error) {
+    console.error("Error generating insights for existing notes:", error);
+    return { 
+      isSuccess: false, 
+      message: `Failed to generate insights: ${error instanceof Error ? error.message : String(error)}`
     };
   }
 } 

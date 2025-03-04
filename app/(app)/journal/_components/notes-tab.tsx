@@ -5,7 +5,6 @@ import VoiceRecorder from "@/components/voice-recorder"
 import VoiceNotesList from "@/components/voice-notes-list"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { SelectVoiceNote } from "@/db/schema"
-import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Sparkles } from "lucide-react"
 import { generateInsightsForExistingNotesAction, updateVoiceNoteAction } from "@/actions/db/voice-notes-actions"
@@ -47,17 +46,8 @@ export default function NotesTab({ userId }: NotesTabProps) {
   }
   
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardContent className="p-6">
-          <VoiceRecorder 
-            userId={userId} 
-            onRecordingComplete={handleRecordingComplete} 
-          />
-        </CardContent>
-      </Card>
-      
-      <div className="flex justify-end">
+    <div className="relative h-full flex flex-col">
+      <div className="flex justify-end mb-2 px-4 md:px-6 flex-none">
         <Button
           size="sm"
           onClick={handleGenerateInsights}
@@ -69,11 +59,22 @@ export default function NotesTab({ userId }: NotesTabProps) {
         </Button>
       </div>
       
-      <div key={refreshKey}>
+      <div key={refreshKey} className="flex-1 overflow-y-auto px-4 md:px-6 pb-20">
         <VoiceNotesList 
           userId={userId} 
           onSelect={setSelectedNote}
         />
+      </div>
+      
+      {/* Floating microphone button */}
+      <div className="fixed bottom-6 inset-x-0 flex justify-center z-10">
+        <div className="shadow-lg rounded-full">
+          <VoiceRecorder 
+            userId={userId} 
+            onRecordingComplete={handleRecordingComplete}
+            floating={true}
+          />
+        </div>
       </div>
       
       <Dialog open={!!selectedNote} onOpenChange={() => setSelectedNote(null)}>

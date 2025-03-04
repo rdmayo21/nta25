@@ -7,13 +7,15 @@ import { Card, CardContent } from "@/components/ui/card"
 import { toast } from "sonner"
 import { createVoiceNoteAction } from "@/actions/db/voice-notes-actions"
 import { transcribeAudioAction, generateTitleAction } from "@/actions/api-actions"
+import { cn } from "@/lib/utils"
 
 interface VoiceRecorderProps {
   userId: string
   onRecordingComplete?: () => void
+  floating?: boolean
 }
 
-export default function VoiceRecorder({ userId, onRecordingComplete }: VoiceRecorderProps) {
+export default function VoiceRecorder({ userId, onRecordingComplete, floating = false }: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
@@ -144,6 +146,48 @@ export default function VoiceRecorder({ userId, onRecordingComplete }: VoiceReco
     const minutes = Math.floor(seconds / 60)
     const remainingSeconds = seconds % 60
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
+  }
+  
+  if (floating) {
+    return (
+      <div className="flex items-center justify-center">
+        {isRecording ? (
+          <div className="flex items-center gap-2 bg-background py-2 px-4 rounded-full shadow-lg">
+            <div className="text-sm font-medium">{formatTime(recordingTime)}</div>
+            <Button 
+              variant="destructive" 
+              size="icon" 
+              className="rounded-full h-12 w-12 shadow-lg"
+              onClick={stopRecording}
+              disabled={isProcessing}
+            >
+              <Square className="h-5 w-5" />
+            </Button>
+          </div>
+        ) : (
+          <>
+            {isProcessing ? (
+              <div className="flex items-center gap-2 bg-background py-2 px-4 rounded-full shadow-lg">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span className="text-sm">{processingStatus}</span>
+              </div>
+            ) : (
+              <Button 
+                variant="default" 
+                size="icon"
+                className={cn(
+                  "rounded-full h-14 w-14 shadow-lg",
+                  floating ? "bg-primary hover:bg-primary/90" : ""
+                )}
+                onClick={startRecording}
+              >
+                <Mic className="h-6 w-6" />
+              </Button>
+            )}
+          </>
+        )}
+      </div>
+    )
   }
   
   return (

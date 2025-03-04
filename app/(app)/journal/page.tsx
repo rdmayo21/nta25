@@ -16,29 +16,33 @@ export default async function JournalPage() {
   }
   
   return (
-    <div className="container max-w-4xl py-6">
-      <h1 className="mb-6 text-3xl font-bold">Voice Journal</h1>
-      
-      <Tabs defaultValue="notes" className="w-full">
-        <TabsList className="mb-6 grid w-full grid-cols-3">
-          <TabsTrigger value="notes" className="flex items-center gap-2">
-            <Mic className="h-4 w-4" />
-            <span>Notes</span>
-          </TabsTrigger>
-          <TabsTrigger value="chat" className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" />
-            <span>Chat</span>
-          </TabsTrigger>
-          <TabsTrigger value="insights" className="flex items-center gap-2">
-            <Lightbulb className="h-4 w-4" />
-            <span>Insights</span>
-          </TabsTrigger>
-        </TabsList>
-        
-        <Suspense fallback={<PageSkeleton />}>
-          <JournalPageContent userId={userId} />
-        </Suspense>
-      </Tabs>
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
+      {/* Tabs are contained in a div with sticky positioning */}
+      <div className="sticky top-0 z-30 bg-background pt-4 px-4 md:px-6 border-b">
+        <Tabs defaultValue="notes" className="w-full flex flex-col h-full">
+          <TabsList className="grid w-full grid-cols-3 flex-none">
+            <TabsTrigger value="notes" className="flex items-center gap-2">
+              <Mic className="h-4 w-4" />
+              <span>Notes</span>
+            </TabsTrigger>
+            <TabsTrigger value="chat" className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" />
+              <span>Chat</span>
+            </TabsTrigger>
+            <TabsTrigger value="insights" className="flex items-center gap-2">
+              <Lightbulb className="h-4 w-4" />
+              <span>Insights</span>
+            </TabsTrigger>
+          </TabsList>
+          
+          {/* Content area that scrolls independently */}
+          <div className="flex-1 overflow-y-auto mt-4">
+            <Suspense fallback={<PageSkeleton />}>
+              <JournalPageContent userId={userId} />
+            </Suspense>
+          </div>
+        </Tabs>
+      </div>
     </div>
   )
 } 

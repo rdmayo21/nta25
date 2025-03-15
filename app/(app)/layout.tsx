@@ -42,7 +42,7 @@ export default async function AppLayout({
         </div>
       </nav>
       
-      <main className="flex-1 overflow-hidden">{children}</main>
+      <main className="flex-1 overflow-auto">{children}</main>
     </div>
   )
 } 

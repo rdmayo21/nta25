@@ -46,8 +46,8 @@ export default function NotesTab({ userId }: NotesTabProps) {
   }
   
   return (
-    <div className="relative h-full flex flex-col">
-      <div className="flex justify-end mb-2 px-4 md:px-6 flex-none">
+    <div className="relative flex flex-col">
+      <div className="flex justify-end mb-2 flex-none">
         <Button
           size="sm"
           onClick={handleGenerateInsights}
@@ -59,7 +59,7 @@ export default function NotesTab({ userId }: NotesTabProps) {
         </Button>
       </div>
       
-      <div key={refreshKey} className="flex-1 overflow-y-auto px-4 md:px-6 pb-20">
+      <div key={refreshKey}>
         <VoiceNotesList 
           userId={userId} 
           onSelect={setSelectedNote}

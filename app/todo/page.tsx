@@ -29,11 +29,11 @@ export default async function TodoPage() {
     return redirect("/pricing")
   }
 
-  const todos = await getTodosAction(userId)
+  const { data: todos = [] } = await getTodosAction(userId)
 
   return (
-    <div className="flex-1 p-4 pt-0">
-      <TodoList userId={userId} initialTodos={todos.data ?? []} />
+    <div className="container mx-auto py-8">
+      <TodoList userId={userId} initialTodos={todos} />
     </div>
   )
 }

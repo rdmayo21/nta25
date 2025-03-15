@@ -191,7 +191,7 @@ export default function VoiceRecorder({ userId, onRecordingComplete, floating = 
   }
   
   return (
-    <Card className="w-full">
+    <Card className="w-full border border-border shadow-md">
       <CardContent className="pt-6">
         <div className="flex flex-col items-center gap-4">
           <div className="flex items-center justify-center gap-4">

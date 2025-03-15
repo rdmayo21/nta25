@@ -149,7 +149,7 @@ export default function VoiceNotesList({ userId, onSelect }: VoiceNotesListProps
   
   if (notes.length === 0 && !isLoading) {
     return (
-      <Card className="border border-border/40">
+      <Card className="border border-border shadow-md">
         <CardContent className="p-6 text-center text-muted-foreground">
           No voice notes yet. Create your first one!
         </CardContent>

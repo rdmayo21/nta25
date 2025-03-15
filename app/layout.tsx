@@ -19,6 +19,7 @@ import { auth } from "@clerk/nextjs/server"
 import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
+import FloatingThemeButton from "@/components/utilities/floating-theme-button"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -70,15 +71,16 @@ export default async function RootLayout({
       <html lang="en" suppressHydrationWarning>
         <body
           className={cn(
-            "bg-background mx-auto min-h-screen w-full scroll-smooth antialiased",
+            "bg-background antialiased mx-auto min-h-screen w-full scroll-smooth",
             inter.className
           )}
         >
           <Providers
             attribute="class"
-            defaultTheme="light"
-            enableSystem={false}
-            disableTransitionOnChange
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange={false}
+            storageKey="voice-journal-theme"
           >
             <PostHogUserIdentify />
             <PostHogPageview />
@@ -86,6 +88,7 @@ export default async function RootLayout({
             {children}
 
             <TailwindIndicator />
+            <FloatingThemeButton />
 
             <Toaster />
           </Providers>

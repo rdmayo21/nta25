@@ -85,7 +85,7 @@ export default function Header() {
         </nav>
 
         <div className="flex items-center space-x-4">
-          <ThemeSwitcher />
+          <ThemeSwitcher className="flex items-center justify-center rounded-full bg-secondary p-2 hover:bg-secondary/80" />
 
           <SignedOut>
             <SignInButton>

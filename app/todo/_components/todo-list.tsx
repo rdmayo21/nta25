@@ -79,7 +79,7 @@ export function TodoList({ userId, initialTodos }: TodoListProps) {
   }
 
   return (
-    <div className="bg-card mx-auto mt-8 max-w-md rounded-lg p-6 shadow">
+    <div className="bg-card mx-auto mt-8 max-w-md rounded-lg border border-border p-6 shadow-md">
       <h1 className="mb-4 text-center text-2xl font-bold">Todo App</h1>
 
       <div className="mb-4 flex">

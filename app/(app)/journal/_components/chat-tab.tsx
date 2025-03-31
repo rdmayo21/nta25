@@ -1,12 +1,24 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Send } from "lucide-react"
-import { getVoiceNotesAction } from "@/actions/db/voice-notes-actions"
+import { Send, Trash2 } from "lucide-react"
 import { chatWithNotesAction } from "@/actions/api-actions"
 import { toast } from "sonner"
+import { getChatMessagesAction, deleteUserChatMessagesAction } from "@/actions/db/chat-messages-actions"
+import { SelectChatMessage } from "@/db/schema"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface ChatTabProps {
   userId: string
@@ -15,77 +27,131 @@ interface ChatTabProps {
 export default function ChatTab({ userId }: ChatTabProps) {
   const [question, setQuestion] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([
-    {
-      role: "assistant",
-      content: "Ask questions about your voice journal entries. Try asking where you were on a specific date!"
+  const [messages, setMessages] = useState<SelectChatMessage[]>([])
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      setIsHistoryLoading(true)
+      try {
+        const result = await getChatMessagesAction(userId)
+        if (result.isSuccess) {
+          setMessages(result.data)
+        } else {
+          toast.error("Failed to load chat history: " + result.message)
+          setMessages([])
+        }
+      } catch (error) {
+        console.error("Error fetching chat history:", error)
+        toast.error("An error occurred while loading chat history.")
+        setMessages([])
+      } finally {
+        setIsHistoryLoading(false)
+      }
     }
-  ])
+    
+    fetchHistory()
+  }, [userId])
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!question.trim() || isLoading) return
+    const trimmedQuestion = question.trim()
+    if (!trimmedQuestion || isLoading) return
     
-    // Add user message to chat
-    const userMessage = { role: "user" as const, content: question }
-    setMessages(prev => [...prev, userMessage])
+    const tempUserMessage: SelectChatMessage = {
+      id: `temp-${Date.now()}`,
+      userId: userId,
+      content: trimmedQuestion,
+      role: "user",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+    setMessages(prev => [...prev, tempUserMessage])
     
-    // Clear input and set loading state
     setQuestion("")
     setIsLoading(true)
     
     try {
-      // Call the actual API action
-      const response = await chatWithNotesAction(question)
+      const response = await chatWithNotesAction(trimmedQuestion)
       
-      if (response.isSuccess && response.response) {
-        setMessages(prev => [...prev, { 
-          role: "assistant", 
-          content: response.response || "Sorry, I couldn't process your request." 
-        }])
+      if (response.isSuccess && response.data) {
+        const assistantMessage: SelectChatMessage = {
+          id: `temp-ai-${Date.now()}`,
+          userId: userId,
+          content: response.data,
+          role: "assistant",
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+        setMessages(prev => [...prev.filter(m => m.id !== tempUserMessage.id), tempUserMessage, assistantMessage])
+
       } else {
-        throw new Error(response.message)
+        toast.error(response.message || "Failed to get response from assistant.")
+        setMessages(prev => prev.filter(m => m.id !== tempUserMessage.id))
       }
     } catch (error) {
-      console.error("Error in chat:", error)
-      toast.error("An error occurred while processing your question")
-      // Add error message to chat
-      setMessages(prev => [...prev, { 
-        role: "assistant", 
-        content: "I'm sorry, an error occurred. Please try again later."
-      }])
+      console.error("Error in chat submission:", error)
+      toast.error("An error occurred while processing your question.")
+      setMessages(prev => prev.filter(m => m.id !== tempUserMessage.id))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Handler for clearing chat history
+  const handleClearChat = async () => {
+    setIsLoading(true) // Reuse isLoading to disable input during clearing
+    try {
+      const result = await deleteUserChatMessagesAction(userId)
+      if (result.isSuccess) {
+        setMessages([]) // Clear local state
+        toast.success("Chat history cleared.")
+      } else {
+        toast.error(result.message || "Failed to clear chat history.")
+      }
+    } catch (error) {
+      console.error("Error clearing chat history:", error)
+      toast.error("An error occurred while clearing chat history.")
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="flex flex-col h-full relative">
-      {/* Header */}
-      <div className="pt-4 px-4 md:px-6">
-        <h2 className="text-xl font-semibold mb-4">Chat with Your Notes</h2>
-        <p className="text-muted-foreground text-sm mb-4">
-          Ask questions about your journal entries, including where you were on specific dates.
-        </p>
-      </div>
-      
-      {/* Scrollable message area with padding at bottom to ensure content isn't hidden behind input bar */}
-      <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-24">
+    <div className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6"> 
         <div className="space-y-4">
-          {messages.map((message, index) => (
-            <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div 
-                className={`max-w-[80%] rounded-lg p-3 ${
-                  message.role === "user" 
-                    ? "bg-primary text-primary-foreground" 
-                    : "bg-muted"
-                }`}
-              >
-                {message.content}
+          {isHistoryLoading ? (
+            <div className="text-center text-muted-foreground p-8">Loading history...</div>
+          ) : messages.length === 0 && !isLoading ? (
+             <div className="text-center text-muted-foreground p-8">
+               Ask anything about your notes...
+             </div>
+           ) : (
+            messages.map((message) => (
+              <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div 
+                  className={`max-w-[80%] rounded-lg p-3 break-words ${
+                    message.role === "user" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "bg-muted"
+                  }`}
+                >
+                  {message.content}
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
           
           {isLoading && (
             <div className="flex justify-start">
@@ -98,20 +164,44 @@ export default function ChatTab({ userId }: ChatTabProps) {
               </div>
             </div>
           )}
+          <div ref={messagesEndRef} /> 
         </div>
       </div>
       
-      {/* Fixed input bar at bottom */}
-      <div className="absolute bottom-0 left-0 right-0 bg-background border-t py-4 px-4 md:px-6">
+      <div className="flex-shrink-0 bg-background border-t py-4 px-4 md:px-6">
+        {messages.length > 0 && (
+          <div className="flex justify-end mb-2">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" disabled={isLoading || isHistoryLoading}>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Clear Chat
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete your chat history.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearChat}>Continue</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
           <Input
-            placeholder="Ask about your voice notes (e.g., 'Where was I on Friday?')"
+            placeholder="Ask about your notes..."
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            disabled={isLoading}
+            disabled={isLoading || isHistoryLoading}
             className="flex-1"
           />
-          <Button type="submit" size="icon" disabled={isLoading}>
+          <Button type="submit" size="icon" disabled={isLoading || isHistoryLoading}>
             <Send className="h-4 w-4" />
           </Button>
         </form>

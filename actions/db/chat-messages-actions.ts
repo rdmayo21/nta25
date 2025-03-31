@@ -45,7 +45,7 @@ export async function getChatMessagesAction(
   }
 }
 
-export async function deleteChatMessagesAction(
+export async function deleteUserChatMessagesAction(
   userId: string
 ): Promise<ActionState<void>> {
   try {
@@ -53,11 +53,19 @@ export async function deleteChatMessagesAction(
     
     return {
       isSuccess: true,
-      message: "Chat messages deleted successfully",
+      message: "Chat history cleared successfully",
       data: undefined
     }
   } catch (error) {
     console.error("Error deleting chat messages:", error)
-    return { isSuccess: false, message: "Failed to delete chat messages" }
+    return { isSuccess: false, message: "Failed to clear chat history" }
   }
-} 
+}
+
+/*
+export async function clearChatHistoryAction(
+  userId: string
+): Promise<ActionState<void>> {
+  return deleteUserChatMessagesAction(userId)
+}
+*/ 

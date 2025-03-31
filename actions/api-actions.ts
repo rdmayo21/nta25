@@ -3,6 +3,12 @@
 import { DeepgramTranscriptionResponse, LLMChatMessage, LLMChatResponse } from "@/types"
 import { getVoiceNotesAction } from "@/actions/db/voice-notes-actions"
 import { auth } from "@clerk/nextjs/server"
+import { 
+  createChatMessageAction, 
+  getChatMessagesAction 
+} from "./db/chat-messages-actions"
+import { ActionState } from "@/types"
+import { SelectChatMessage } from "@/db/schema"
 
 // DeepGram API action to transcribe audio
 export async function transcribeAudioAction(
@@ -41,18 +47,41 @@ export async function transcribeAudioAction(
 // LLM API action to chat with voice notes
 export async function chatWithNotesAction(
   userMessage: string
-): Promise<{ isSuccess: boolean; response?: string; message: string }> {
+): Promise<ActionState<string>> {
   try {
     const { userId } = await auth()
     
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" }
     }
+
+    // 1. Save the user's message first
+    const saveUserMsgResult = await createChatMessageAction({ 
+      userId, 
+      content: userMessage, 
+      role: "user" 
+    })
+    if (!saveUserMsgResult.isSuccess) {
+      console.error("Failed to save user message:", saveUserMsgResult.message)
+      // Decide if we should proceed or return error. Let's return error for now.
+      return { isSuccess: false, message: "Failed to save your message. Please try again." }
+    }
     
-    // Get all user's voice notes to use as context
+    // 2. Get chat history (including the message just saved)
+    const historyResult = await getChatMessagesAction(userId)
+    if (!historyResult.isSuccess) {
+      // Log error but proceed, maybe context is not critical? Or return error?
+      console.error("Failed to retrieve chat history:", historyResult.message)
+      // Let's proceed without history for now, but log it.
+      // return { isSuccess: false, message: "Failed to retrieve chat history." }; 
+    }
+    const chatHistory = historyResult.isSuccess ? historyResult.data : []
+
+    // 3. Get all user's voice notes to use as context
     const voiceNotesResult = await getVoiceNotesAction(userId)
     
     if (!voiceNotesResult.isSuccess) {
+      // If notes fail, maybe we can still chat? Or return error? Let's return error.
       return { isSuccess: false, message: "Failed to retrieve voice notes for context" }
     }
     
@@ -75,14 +104,15 @@ export async function chatWithNotesAction(
       })
       .join("\n\n");
     
+    // 4. Construct messages for OpenAI, including history
     const messages: LLMChatMessage[] = [
       {
         role: "system",
-        content: `You are a helpful AI assistant for a voice journaling app. Your primary function is to help users navigate and extract information from their voice notes.
+        content: `You are a helpful AI assistant for a voice journaling app. Your primary function is to help users navigate and extract information from their voice notes based on the provided context AND the ongoing conversation history. Remember previous questions and answers.
 
 When responding to queries about dates and locations:
 1. Pay close attention to specific dates mentioned in the query (e.g., "Where was I on March 15th?")
-2. Search through the voice notes to find entries from that date or containing references to that date
+2. Search through the voice notes context to find entries from that date or containing references to that date
 3. Extract location information from those notes - this may be in the Location field or mentioned in the Content
 4. If a note from the exact date exists but doesn't have a Location field, look for location mentions in the Content
 5. If no notes exist from the exact date, look for the closest dates before and after, and mention this in your response
@@ -94,23 +124,33 @@ For location-based queries:
 3. If multiple notes exist for the same date with different locations, mention all of them
 4. If no location information can be found, explain that there are notes from that date but no location is mentioned
 
-Each note includes:
+Each note context includes:
 - Date header: when the note was created
 - Location (if available): extracted location from the note
 - Content section: the transcribed text of the voice note
 
-Only use information from these notes to answer questions. If the answer cannot be found in the notes, politely say so.
+Only use information from the provided voice notes context and the conversation history to answer questions. If the answer cannot be found, politely say so. Acknowledge the flow of conversation based on the history.
 
-Here are the user's voice notes:
+Here is the conversation history (if any):
+${chatHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}
+
+Here are the user's voice notes context:
 
 ${voiceNotesContext}`
       },
-      {
-        role: "user",
-        content: userMessage
-      }
+      // Add historical messages (excluding the system prompt equivalent if any)
+      // Map SelectChatMessage[] to LLMChatMessage[]
+      ...chatHistory.map((msg: SelectChatMessage): LLMChatMessage => ({
+        role: msg.role as "user" | "assistant", // Ensure role type matches
+        content: msg.content
+      })),
+      // Current user message is already included via chatHistory retrieval
+      // Let's make sure it doesn't double add. The history fetch INCLUDES the latest user message.
+      // So we don't need to add it again here.
+      // { role: "user", content: userMessage } // REMOVED as it's in history
     ]
     
+    // 5. Call OpenAI API
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -118,7 +158,7 @@ ${voiceNotesContext}`
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: "gpt-4o", // Changed to gpt-4o as per project context
         messages,
         temperature: 0.7,
         max_tokens: 500
@@ -131,8 +171,25 @@ ${voiceNotesContext}`
     
     const data = await response.json()
     const assistantMessage = data.choices[0].message.content
+
+    // 6. Save the assistant's response
+    const saveAssistantMsgResult = await createChatMessageAction({ 
+      userId, 
+      content: assistantMessage, 
+      role: "assistant" 
+    })
+    if (!saveAssistantMsgResult.isSuccess) {
+      // Log the error, but return the response to the user anyway
+      console.error("Failed to save assistant message:", saveAssistantMsgResult.message)
+      // We can still return success because the user got a response
+    }
     
-    return { isSuccess: true, response: assistantMessage, message: "LLM responded successfully" }
+    // 7. Return success with the assistant's response
+    return { 
+      isSuccess: true, 
+      data: assistantMessage, // Use data field as per ActionState<string>
+      message: "LLM responded successfully" 
+    }
   } catch (error) {
     console.error("Error chatting with notes:", error)
     return { isSuccess: false, message: "Failed to get response from LLM" }

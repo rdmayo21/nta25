@@ -17,7 +17,7 @@ export default async function JournalPage() {
   
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
-      <Tabs defaultValue="notes" className="flex flex-col h-full">
+      <Tabs defaultValue="notes" className="flex flex-col h-full flex-1">
         {/* Tabs header with sticky positioning */}
         <div className="sticky top-0 z-30 bg-background pt-4 px-4 md:px-6 border-b">
           <TabsList className="grid w-full grid-cols-3 flex-none">
@@ -36,14 +36,12 @@ export default async function JournalPage() {
           </TabsList>
         </div>
         
-        {/* Content area that scrolls independently */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="mt-4 px-4 md:px-6 pb-20">
-            <Suspense fallback={<PageSkeleton />}>
-              <JournalPageContent userId={userId} />
-            </Suspense>
-          </div>
-        </div>
+        {/* Removed the intermediate wrapper div. Suspense/JournalPageContent is now direct child */}
+        {/* TabsContent rendered inside JournalPageContent will inherit flex context */}
+         <Suspense fallback={<PageSkeleton />}>
+           <JournalPageContent userId={userId} />
+         </Suspense>
+
       </Tabs>
     </div>
   )

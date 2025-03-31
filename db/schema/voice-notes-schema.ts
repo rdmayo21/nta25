@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import { integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
 
 export const voiceNotesTable = pgTable("voice_notes", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -6,7 +6,9 @@ export const voiceNotesTable = pgTable("voice_notes", {
   title: text("title").notNull(),
   audioUrl: text("audio_url").notNull(), // URL to the stored audio file
   transcription: text("transcription").notNull(), // Transcribed text from DeepGram
-  keyInsight: text("key_insight"), // Key insight extracted from the transcription
+  overview: text("overview"), // Overview extracted from the transcription
+  // location: text("location"), // Optional location information extracted from the note - Commented out until DB is updated
+  // duration: integer("duration").notNull().default(0), // Duration of audio in seconds - Commented out until DB is updated
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

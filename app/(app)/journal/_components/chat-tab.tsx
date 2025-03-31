@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Send } from "lucide-react"
 import { getVoiceNotesAction } from "@/actions/db/voice-notes-actions"
+import { chatWithNotesAction } from "@/actions/api-actions"
 import { toast } from "sonner"
 
 interface ChatTabProps {
@@ -17,7 +18,7 @@ export default function ChatTab({ userId }: ChatTabProps) {
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([
     {
       role: "assistant",
-      content: "Ask questions about your voice journal entries"
+      content: "Ask questions about your voice journal entries. Try asking where you were on a specific date!"
     }
   ])
 
@@ -35,14 +36,17 @@ export default function ChatTab({ userId }: ChatTabProps) {
     setIsLoading(true)
     
     try {
-      // Simulate AI response
-      setTimeout(() => {
+      // Call the actual API action
+      const response = await chatWithNotesAction(question)
+      
+      if (response.isSuccess && response.response) {
         setMessages(prev => [...prev, { 
           role: "assistant", 
-          content: generateDemoResponse(question) 
+          content: response.response || "Sorry, I couldn't process your request." 
         }])
-        setIsLoading(false)
-      }, 1500)
+      } else {
+        throw new Error(response.message)
+      }
     } catch (error) {
       console.error("Error in chat:", error)
       toast.error("An error occurred while processing your question")
@@ -51,30 +55,8 @@ export default function ChatTab({ userId }: ChatTabProps) {
         role: "assistant", 
         content: "I'm sorry, an error occurred. Please try again later."
       }])
+    } finally {
       setIsLoading(false)
-    }
-  }
-  
-  // Demo function to generate responses
-  const generateDemoResponse = (question: string): string => {
-    const responses = [
-      "Based on your voice notes, you've been focusing on testing the app and providing feedback on transcription accuracy.",
-      "Your last voice note was about testing the voice recording feature. You mentioned that the transcription accuracy was impressive.",
-      "I noticed that you've been documenting your experience with this journaling app. You mentioned it helps you organize your thoughts better.",
-      "You seem to be tracking health-related topics in your notes, including symptoms and recovery progress.",
-      "Your voice notes indicate you've been planning future events and setting goals for both personal and professional development."
-    ]
-    
-    // Return a response based on keywords in the question
-    if (question.toLowerCase().includes("last note")) {
-      return "Your last voice note, recorded on March 3, 2025, was about testing the recording capability of an app. You also mentioned that you were feeling sick but getting better.";
-    } else if (question.toLowerCase().includes("health")) {
-      return "You've mentioned health-related topics in 7 entries, including symptoms like congestion, recovery periods, and energy levels.";
-    } else if (question.toLowerCase().includes("transcription") || question.toLowerCase().includes("accuracy")) {
-      return "You've provided feedback about transcription accuracy in several notes. In your most recent note, you mentioned that the voice recognition seems to be working better after the update.";
-    } else {
-      // Return a random response if no keywords match
-      return responses[Math.floor(Math.random() * responses.length)];
     }
   }
 
@@ -83,6 +65,9 @@ export default function ChatTab({ userId }: ChatTabProps) {
       {/* Header */}
       <div className="pt-4 px-4 md:px-6">
         <h2 className="text-xl font-semibold mb-4">Chat with Your Notes</h2>
+        <p className="text-muted-foreground text-sm mb-4">
+          Ask questions about your journal entries, including where you were on specific dates.
+        </p>
       </div>
       
       {/* Scrollable message area with padding at bottom to ensure content isn't hidden behind input bar */}
@@ -120,7 +105,7 @@ export default function ChatTab({ userId }: ChatTabProps) {
       <div className="absolute bottom-0 left-0 right-0 bg-background border-t py-4 px-4 md:px-6">
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
           <Input
-            placeholder="Ask about your voice notes..."
+            placeholder="Ask about your voice notes (e.g., 'Where was I on Friday?')"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             disabled={isLoading}

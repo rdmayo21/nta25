@@ -6,9 +6,11 @@ import VoiceNotesList from "@/components/voice-notes-list"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { SelectVoiceNote } from "@/db/schema"
 import { Button } from "@/components/ui/button"
-import { Sparkles } from "lucide-react"
-import { generateInsightsForExistingNotesAction, updateVoiceNoteAction } from "@/actions/db/voice-notes-actions"
-import { extractKeyInsightAction } from "@/actions/api-actions"
+import { MapPin } from "lucide-react"
+import { 
+  // Comment out until database is updated
+  // generateLocationsForExistingNotesAction 
+} from "@/actions/db/voice-notes-actions"
 import { toast } from "sonner"
 
 interface NotesTabProps {
@@ -18,45 +20,51 @@ interface NotesTabProps {
 export default function NotesTab({ userId }: NotesTabProps) {
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedNote, setSelectedNote] = useState<SelectVoiceNote | null>(null)
-  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false)
+  // Comment out until database is updated
+  // const [isGeneratingLocations, setIsGeneratingLocations] = useState(false)
   
-  const handleRecordingComplete = () => {
-    setRefreshKey(prev => prev + 1)
-  }
-  
-  const handleGenerateInsights = async () => {
+  /* Comment out until database is updated
+  // Handle generating locations for existing notes
+  const handleGenerateLocations = async () => {
+    setIsGeneratingLocations(true)
+    
     try {
-      setIsGeneratingInsights(true)
-      
-      const result = await generateInsightsForExistingNotesAction(userId)
+      const result = await generateLocationsForExistingNotesAction(userId)
       
       if (result.isSuccess) {
         toast.success(result.message)
-        // Refresh the list to show new insights
-        setRefreshKey(prev => prev + 1)
+        setRefreshKey(prev => prev + 1) // Force refresh
       } else {
         toast.error(result.message)
       }
     } catch (error) {
-      console.error("Error generating insights:", error)
-      toast.error("Failed to generate insights")
+      console.error("Error generating locations:", error)
+      toast.error("An error occurred while extracting location information")
     } finally {
-      setIsGeneratingInsights(false)
+      setIsGeneratingLocations(false)
     }
+  }
+  */
+  
+  // Handle when recording is completed
+  const handleRecordingComplete = () => {
+    setRefreshKey(prev => prev + 1) // Force refresh
   }
   
   return (
     <div className="relative flex flex-col">
-      <div className="flex justify-end mb-2 flex-none">
+      <div className="flex justify-end mb-2 flex-none gap-2">
+        {/* Comment out until database is updated
         <Button
           size="sm"
-          onClick={handleGenerateInsights}
-          disabled={isGeneratingInsights}
+          onClick={handleGenerateLocations}
+          disabled={isGeneratingLocations}
           className="gap-1"
         >
-          <Sparkles className="h-4 w-4" />
-          {isGeneratingInsights ? "Processing..." : "Generate Keys"}
+          <MapPin className="h-4 w-4" />
+          {isGeneratingLocations ? "Processing..." : "Find Locations"}
         </Button>
+        */}
       </div>
       
       <div key={refreshKey}>
@@ -90,59 +98,13 @@ export default function NotesTab({ userId }: NotesTabProps) {
             {selectedNote && (
               <>
                 <audio src={selectedNote.audioUrl} controls className="w-full" />
-                {selectedNote.keyInsight ? (
+                {selectedNote.overview ? (
                   <div className="rounded-md bg-primary/10 p-4 text-sm">
-                    <p className="font-medium">Key Insight</p>
-                    <p>{selectedNote.keyInsight}</p>
+                    <p className="font-medium">Overview</p>
+                    <p>{selectedNote.overview}</p>
                   </div>
                 ) : (
-                  <div className="flex justify-end">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-xs"
-                      onClick={async () => {
-                        try {
-                          if (!selectedNote.id) return;
-                          
-                          toast.info("Generating insight...");
-                          
-                          // Extract key insight
-                          const insightResult = await extractKeyInsightAction(selectedNote.transcription);
-                          
-                          if (insightResult.isSuccess && insightResult.insight) {
-                            // Update the note with the new insight
-                            const updateResult = await updateVoiceNoteAction(
-                              selectedNote.id,
-                              { keyInsight: insightResult.insight }
-                            );
-                            
-                            if (updateResult.isSuccess) {
-                              // Update the selected note to show the insight
-                              setSelectedNote({
-                                ...selectedNote,
-                                keyInsight: insightResult.insight
-                              });
-                              
-                              toast.success("Insight generated successfully");
-                              
-                              // Refresh the list
-                              setRefreshKey(prev => prev + 1);
-                            } else {
-                              toast.error(updateResult.message);
-                            }
-                          } else {
-                            toast.error(insightResult.message);
-                          }
-                        } catch (error) {
-                          console.error("Error generating insight:", error);
-                          toast.error("Failed to generate insight");
-                        }
-                      }}
-                    >
-                      Generate Insight
-                    </Button>
-                  </div>
+                  <p className="text-sm text-muted-foreground italic">Overview not available.</p>
                 )}
                 <div className="max-h-60 overflow-y-auto rounded-md border p-4 text-sm">
                   <p>{selectedNote.transcription}</p>

@@ -114,11 +114,14 @@ export default function VoiceRecorder({ userId, onRecordingComplete, floating = 
       
       // Step 4: Save the voice note
       setProcessingStatus("Saving...")
+      
+      // Do not include duration field until database is updated
       const result = await createVoiceNoteAction({
         userId,
         title,
         audioUrl, // In a real app, you'd upload to storage first and save the URL
         transcription
+        // duration: recordingTime // Uncomment once database is updated
       })
       
       if (result.isSuccess) {

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Voice Journal is a web application that allows users to record, transcribe, and analyze voice notes. It offers a streamlined journaling experience where users can easily capture their thoughts via voice, review transcriptions, and get AI-generated insights from their recordings. 
+Voice Journal is a web application that allows users to record, transcribe, and analyze voice notes. It offers a streamlined journaling experience where users can easily capture their thoughts via voice, review transcriptions, and get AI-generated overviews from their recordings. 
 
 ## Tech Stack
 
@@ -10,7 +10,7 @@ Voice Journal is a web application that allows users to record, transcribe, and 
 - **Backend**: Next.js Server Actions, Drizzle ORM
 - **Database**: PostgreSQL hosted on Supabase
 - **Authentication**: Clerk
-- **AI Services**: OpenAI (for insights), Deepgram (for transcription)
+- **AI Services**: OpenAI (for generating overviews), Deepgram (for transcription)
 - **Payments**: Stripe (integration ready)
 - **Analytics**: PostHog (integration ready)
 - **Deployment**: Vercel
@@ -19,7 +19,7 @@ Voice Journal is a web application that allows users to record, transcribe, and 
 
 1. **Voice Recording**: Record voice notes directly in the browser
 2. **Automatic Transcription**: Audio recordings are automatically transcribed using Deepgram
-3. **Key Insights**: AI-powered extraction of key points from transcriptions
+3. **Note Overview**: AI-powered generation of a concise overview for each note
 4. **Favorites**: Mark voice notes as favorites for easy access
 5. **Chat Interface**: Interact with your journal entries via chat
 6. **Insights Analysis**: Get overall analysis of trends and patterns in your journaling
@@ -71,7 +71,7 @@ export const voiceNotesTable = pgTable("voice_notes", {
   title: text("title").notNull(),
   audioUrl: text("audio_url").notNull(),
   transcription: text("transcription").notNull(),
-  keyInsight: text("key_insight"),
+  overview: text("overview"),
   duration: integer("duration").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
@@ -131,7 +131,7 @@ export const chatMessagesTable = pgTable("chat_messages", {
 ## AI Integration
 
 1. **Transcription**: Uses Deepgram's API to convert audio to text
-2. **Key Insights**: OpenAI is used to extract the most important points from voice note transcriptions
+2. **Note Overview**: OpenAI is used to generate a concise overview from voice note transcriptions
 3. **Chat**: The chat interface uses OpenAI to provide conversational interaction with the user's journal entries
 
 ## User Interface Components
@@ -144,7 +144,7 @@ Displays the list of voice notes with options to:
 - Play/pause audio
 - Mark as favorite
 - Delete notes
-- View detailed transcriptions and insights
+- View detailed transcriptions and the generated overview
 
 ### Tabs Interface
 The main journal interface is divided into three tabs:
@@ -176,7 +176,7 @@ The app relies on several environment variables:
 - `DATABASE_URL`: PostgreSQL connection string
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`: For authentication
 - `DEEPGRAM_API_KEY`: For audio transcription
-- `OPENAI_API_KEY`: For AI-powered insights
+- `OPENAI_API_KEY`: For AI-powered features (like overviews and chat)
 
 ## Potential Future Features
 

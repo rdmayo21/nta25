@@ -56,18 +56,54 @@ export async function chatWithNotesAction(
       return { isSuccess: false, message: "Failed to retrieve voice notes for context" }
     }
     
-    // Create system prompt with voice notes as context
+    // Format notes with dates and create a structured context
     const voiceNotesContext = voiceNotesResult.data
-      .map(note => `Note (${new Date(note.createdAt).toLocaleDateString()}): ${note.transcription}`)
-      .join("\n\n")
+      .map(note => {
+        const noteDate = new Date(note.createdAt);
+        const formattedDate = noteDate.toLocaleDateString('en-US', { 
+          weekday: 'long',
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric'
+        });
+        
+        // Handle location safely (it might not exist in the database yet)
+        // @ts-ignore - Temporarily ignore TypeScript errors until the database is updated
+        const locationInfo = note.location ? `Location: ${note.location}\n` : '';
+        
+        return `Note Date: ${formattedDate}\n${locationInfo}Content: ${note.transcription}`;
+      })
+      .join("\n\n");
     
     const messages: LLMChatMessage[] = [
       {
         role: "system",
-        content: `You are a helpful assistant that responds to queries based on the user's voice notes. 
-                 Here are the user's voice notes:\n\n${voiceNotesContext}\n\n
-                 Only use information from these notes to answer questions. If the answer cannot be 
-                 found in the notes, politely say so.`
+        content: `You are a helpful AI assistant for a voice journaling app. Your primary function is to help users navigate and extract information from their voice notes.
+
+When responding to queries about dates and locations:
+1. Pay close attention to specific dates mentioned in the query (e.g., "Where was I on March 15th?")
+2. Search through the voice notes to find entries from that date or containing references to that date
+3. Extract location information from those notes - this may be in the Location field or mentioned in the Content
+4. If a note from the exact date exists but doesn't have a Location field, look for location mentions in the Content
+5. If no notes exist from the exact date, look for the closest dates before and after, and mention this in your response
+6. Always cite which date the information comes from
+
+For location-based queries:
+1. When asked "Where was I on [date]?", first look for notes from that exact date and check their Location field
+2. If no Location field exists, analyze the content for location mentions (cities, venues, addresses, etc.)
+3. If multiple notes exist for the same date with different locations, mention all of them
+4. If no location information can be found, explain that there are notes from that date but no location is mentioned
+
+Each note includes:
+- Date header: when the note was created
+- Location (if available): extracted location from the note
+- Content section: the transcribed text of the voice note
+
+Only use information from these notes to answer questions. If the answer cannot be found in the notes, politely say so.
+
+Here are the user's voice notes:
+
+${voiceNotesContext}`
       },
       {
         role: "user",
@@ -175,16 +211,16 @@ export async function generateTitleAction(
   }
 }
 
-// Generate key insight from voice note transcription
-export async function extractKeyInsightAction(
+// Generate overview from voice note transcription
+export async function generateOverviewAction(
   transcription: string
-): Promise<{ isSuccess: boolean; insight?: string; message: string }> {
+): Promise<{ isSuccess: boolean; overview?: string; message: string }> {
   try {
     // Validate input
     if (!transcription || transcription.trim() === "") {
       return { 
         isSuccess: false, 
-        message: "Cannot extract insight from empty transcription" 
+        message: "Cannot generate overview from empty transcription" 
       };
     }
     
@@ -200,11 +236,11 @@ export async function extractKeyInsightAction(
     const messages: LLMChatMessage[] = [
       {
         role: "system",
-        content: "You extract concise key insights from personal voice notes. Your insights should be direct, specific, and brief (typically 10-20 words). Use second-person perspective, addressing the note creator directly with 'you' or imperative verbs. Never use phrases like 'the key insight is' or third-person references. Start with action verbs or 'You need to/should' when appropriate. Focus on actionable advice, main ideas, or critical observations that speak directly to the note creator. The insight should be clear enough to be understood as a standalone statement."
+        content: "You create a very concise summary (overview) of a voice note transcription, suitable for a preview. Write it in the first person, as if the user is recalling the note's main point. Keep it brief, around 15-25 words. Focus on the core topic or action mentioned. Example: 'I was brainstorming ideas for the new project presentation.' or 'Reminder to pick up groceries after work.'"
       },
       {
         role: "user",
-        content: `Extract the single most important insight from this voice note transcription, addressing me directly in a concise but informative way: "${transcription}"`
+        content: `Generate a brief, first-person overview for this voice note transcription: "${transcription}"`
       }
     ]
     
@@ -215,10 +251,10 @@ export async function extractKeyInsightAction(
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini", // Using the mini model for efficiency and cost
+        model: "gpt-4o-mini", // Use a faster model for summaries
         messages,
-        temperature: 0.3, // Lower temperature for more focused responses
-        max_tokens: 100
+        temperature: 0.6,
+        max_tokens: 60 // Allow slightly more tokens for a summary
       })
     })
     
@@ -235,33 +271,14 @@ export async function extractKeyInsightAction(
       throw new Error("Invalid response format from OpenAI API");
     }
     
-    let insight = data.choices[0].message.content.trim();
+    const overview = data.choices[0].message.content.trim()
     
-    // Remove common introductory phrases if present
-    insight = insight
-      .replace(/^(the key insight( is)?|the main point( is)?|the insight( is)?|you (say|mention)|according to you)[ :]*that[ :]*/i, '')
-      .replace(/^(in (your|this) voice note|(your|this) voice note|the voice note|the note),? /i, '')
-      .replace(/^(the (key|main|important) (insight|point|takeaway) is )/i, '')
-      .replace(/^(key insight: |insight: |main point: )/i, '')
-      .replace(/^you should /i, 'Should ') // Convert "You should X" to just "Should X" for brevity
-      .replace(/^you need to /i, 'Need to '); // Convert "You need to X" to just "Need to X" for brevity
-    
-    // Capitalize first letter if needed
-    if (insight.length > 0) {
-      insight = insight.charAt(0).toUpperCase() + insight.slice(1);
-    }
-    
-    // Remove trailing period if present (to save space)
-    if (insight.endsWith('.')) {
-      insight = insight.slice(0, -1);
-    }
-    
-    return { isSuccess: true, insight, message: "Insight extracted successfully" }
+    return { isSuccess: true, overview, message: "Overview generated successfully" }
   } catch (error) {
-    console.error("Error extracting insight:", error)
+    console.error("Error generating overview:", error)
     return { 
       isSuccess: false, 
-      message: `Failed to extract insight: ${error instanceof Error ? error.message : String(error)}` 
+      message: `Failed to generate overview: ${error instanceof Error ? error.message : String(error)}`
     }
   }
 }
@@ -371,5 +388,86 @@ export async function analyzeThemesAction(
       isSuccess: false,
       message: `Failed to analyze themes: ${error instanceof Error ? error.message : String(error)}`
     };
+  }
+}
+
+// Extract location information from voice note transcription
+export async function extractLocationAction(
+  transcription: string
+): Promise<{ isSuccess: boolean; location?: string; message: string }> {
+  try {
+    // Validate input
+    if (!transcription || transcription.trim() === "") {
+      return { 
+        isSuccess: false, 
+        message: "Cannot extract location from empty transcription" 
+      };
+    }
+    
+    // Check if API key is available
+    if (!process.env.OPENAI_API_KEY) {
+      console.error("OPENAI_API_KEY is not set in environment variables");
+      return {
+        isSuccess: false,
+        message: "OpenAI API key is not configured"
+      };
+    }
+    
+    const messages: LLMChatMessage[] = [
+      {
+        role: "system",
+        content: "Extract location information from the voice note. If there's no clear location mentioned, respond with 'No location mentioned'. Only extract real locations (cities, countries, venues, addresses, landmarks), not abstract concepts. Return only the location name without any additional text."
+      },
+      {
+        role: "user",
+        content: `Extract any location information from this voice note: "${transcription}"`
+      }
+    ]
+    
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini", // Using the mini model for efficiency and cost
+        messages,
+        temperature: 0.3, // Lower temperature for more focused responses
+        max_tokens: 50
+      })
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error(`OpenAI API error (${response.status}): ${errorData}`);
+      throw new Error(`OpenAI API error: ${response.statusText} (${response.status})`);
+    }
+    
+    const data = await response.json()
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      console.error("Unexpected API response format:", data);
+      throw new Error("Invalid response format from OpenAI API");
+    }
+    
+    let location = data.choices[0].message.content.trim();
+    
+    // If no location is found, return null
+    if (location.toLowerCase() === "no location mentioned") {
+      return { 
+        isSuccess: true, 
+        location: undefined, 
+        message: "No location found in transcription" 
+      };
+    }
+    
+    return { isSuccess: true, location, message: "Location extracted successfully" }
+  } catch (error) {
+    console.error("Error extracting location:", error)
+    return { 
+      isSuccess: false, 
+      message: `Failed to extract location: ${error instanceof Error ? error.message : String(error)}` 
+    }
   }
 } 

@@ -5,35 +5,61 @@ import { InsertVoiceNote, SelectVoiceNote, voiceNotesTable } from "@/db/schema"
 import { ActionState } from "@/types"
 import { eq, desc } from "drizzle-orm"
 import { auth } from "@clerk/nextjs/server"
-import { extractKeyInsightAction } from "@/actions/api-actions"
+import { generateOverviewAction } from "@/actions/api-actions"
 import { analyzeThemesAction } from "@/actions/api-actions"
+import { extractLocationAction } from "@/actions/api-actions"
 
 export async function createVoiceNoteAction(
   voiceNote: InsertVoiceNote
 ): Promise<ActionState<SelectVoiceNote>> {
   try {
-    // Extract key insight if transcription is available
-    let keyInsight = undefined;
+    // Generate overview if transcription is available
+    let overview = undefined;
+    // Comment out location until database is updated
+    // let location = undefined;
     
     if (voiceNote.transcription) {
       try {
-        const insightResult = await extractKeyInsightAction(voiceNote.transcription);
-        if (insightResult.isSuccess && insightResult.insight) {
-          keyInsight = insightResult.insight;
+        // Generate overview
+        const overviewResult = await generateOverviewAction(voiceNote.transcription);
+        if (overviewResult.isSuccess && overviewResult.overview) {
+          overview = overviewResult.overview;
         } else {
-          console.log(`Could not generate insight: ${insightResult.message}`);
+          console.log(`Could not generate overview: ${overviewResult.message}`);
         }
-      } catch (insightError) {
-        console.error("Error generating insight (continuing anyway):", insightError);
+        
+        // Comment out location extraction until database is updated
+        /* 
+        // Extract location
+        const locationResult = await extractLocationAction(voiceNote.transcription);
+        if (locationResult.isSuccess && locationResult.location) {
+          location = locationResult.location;
+          console.log(`Extracted location: ${location}`);
+        } else {
+          console.log(`No location found: ${locationResult.message}`);
+        }
+        */
+      } catch (error) {
+        console.error("Error generating overview (continuing anyway):", error);
       }
+    }
+    
+    // Create object without location and duration fields
+    const insertData = {
+      ...voiceNote,
+      overview,
+      // location,  // Remove until database is updated
+      // duration: 0 // Remove until database is updated
+    };
+    
+    // Remove duration property if it exists in the incoming data
+    if ('duration' in insertData) {
+      delete insertData.duration;
     }
     
     const [newVoiceNote] = await db
       .insert(voiceNotesTable)
-      .values({
-        ...voiceNote,
-        keyInsight
-      })
+      .values(insertData)
       .returning()
     
     return {
@@ -135,8 +161,8 @@ export async function deleteVoiceNoteAction(
 export async function saveVoiceNoteAction(data: {
   content: string,
   title?: string,
-  audioUrl?: string
-  // other fields
+  audioUrl?: string,
+  duration?: number
 }): Promise<ActionState<SelectVoiceNote>> {
   try {
     const { userId } = await auth();
@@ -154,28 +180,43 @@ export async function saveVoiceNoteAction(data: {
     
     console.log("Voice note content length:", data.content.length);
     
-    // Extract key insight
-    let keyInsight = undefined;
+    // Generate overview (comment out location until database is updated)
+    let overview = undefined;
+    // let location = undefined;
     
     try {
-      const insightResult = await extractKeyInsightAction(data.content);
-      if (insightResult.isSuccess && insightResult.insight) {
-        keyInsight = insightResult.insight;
-        console.log("Generated insight:", keyInsight);
+      // Generate overview
+      const overviewResult = await generateOverviewAction(data.content);
+      if (overviewResult.isSuccess && overviewResult.overview) {
+        overview = overviewResult.overview;
+        console.log("Generated overview:", overview);
       } else {
-        console.log("Could not generate insight:", insightResult.message);
+        console.log("Could not generate overview:", overviewResult.message);
       }
-    } catch (insightError) {
-      console.error("Error extracting insight (continuing anyway):", insightError);
+      
+      /* Comment out location extraction until database is updated
+      // Extract location
+      const locationResult = await extractLocationAction(data.content);
+      if (locationResult.isSuccess && locationResult.location) {
+        location = locationResult.location;
+        console.log("Extracted location:", location);
+      } else {
+        console.log("No location found:", locationResult.message);
+      }
+      */
+    } catch (error) {
+      console.error("Error generating overview (continuing anyway):", error);
     }
     
-    // Make sure we have all required fields
+    // Make sure we have all required fields, omitting location and duration until DB is updated
     const noteData = {
       userId,
       transcription: data.content,
       title: data.title || "Untitled Voice Note",
       audioUrl: data.audioUrl || "",
-      keyInsight
+      // duration: data.duration || 0, // Omit until database is updated
+      overview,
+      // location
     };
     
     console.log("Saving note with data:", {
@@ -190,7 +231,8 @@ export async function saveVoiceNoteAction(data: {
     console.log("Saved voice note:", {
       id: newNote.id,
       title: newNote.title,
-      hasKeyInsight: !!newNote.keyInsight
+      hasOverview: !!newNote.overview
+      // hasLocation: !!newNote.location
     });
     
     return {
@@ -203,55 +245,6 @@ export async function saveVoiceNoteAction(data: {
     return { 
       isSuccess: false, 
       message: `Failed to save voice note: ${error instanceof Error ? error.message : String(error)}` 
-    };
-  }
-}
-
-export async function generateInsightsForExistingNotesAction(
-  userId: string
-): Promise<ActionState<number>> {
-  try {
-    const { isSuccess, data: notes, message } = await getVoiceNotesAction(userId);
-    
-    if (!isSuccess || !notes) {
-      return { isSuccess: false, message: `Failed to retrieve notes: ${message}` };
-    }
-    
-    const notesWithoutInsights = notes.filter(note => !note.keyInsight);
-    
-    if (notesWithoutInsights.length === 0) {
-      return { isSuccess: true, message: "No notes without insights found", data: 0 };
-    }
-    
-    let updatedCount = 0;
-    
-    for (const note of notesWithoutInsights) {
-      try {
-        const insightResult = await extractKeyInsightAction(note.transcription);
-        
-        if (insightResult.isSuccess && insightResult.insight) {
-          await db.update(voiceNotesTable)
-            .set({ keyInsight: insightResult.insight })
-            .where(eq(voiceNotesTable.id, note.id))
-          
-          updatedCount++;
-        }
-      } catch (error) {
-        console.error(`Error generating insight for note ${note.id}:`, error);
-        // Continue with the next note
-      }
-    }
-    
-    return {
-      isSuccess: true,
-      message: `Generated insights for ${updatedCount} existing notes`,
-      data: updatedCount
-    };
-  } catch (error) {
-    console.error("Error generating insights for existing notes:", error);
-    return { 
-      isSuccess: false, 
-      message: `Failed to generate insights: ${error instanceof Error ? error.message : String(error)}`
     };
   }
 }
@@ -294,4 +287,56 @@ export async function analyzeVoiceNoteThemesAction(
       message: `Failed to analyze themes: ${error instanceof Error ? error.message : String(error)}`
     };
   }
-} 
+}
+
+// Comment out this entire function until the database is updated
+/*
+export async function generateLocationsForExistingNotesAction(
+  userId: string
+): Promise<ActionState<number>> {
+  try {
+    const { isSuccess, data: notes, message } = await getVoiceNotesAction(userId);
+    
+    if (!isSuccess || !notes) {
+      return { isSuccess: false, message: `Failed to retrieve notes: ${message}` };
+    }
+    
+    const notesWithoutLocations = notes.filter(note => !note.location);
+    
+    if (notesWithoutLocations.length === 0) {
+      return { isSuccess: true, message: "No notes without location information found", data: 0 };
+    }
+    
+    let updatedCount = 0;
+    
+    for (const note of notesWithoutLocations) {
+      try {
+        const locationResult = await extractLocationAction(note.transcription);
+        
+        if (locationResult.isSuccess && locationResult.location) {
+          await db.update(voiceNotesTable)
+            .set({ location: locationResult.location })
+            .where(eq(voiceNotesTable.id, note.id));
+          
+          updatedCount++;
+        }
+      } catch (error) {
+        console.error(`Error generating location for note ${note.id}:`, error);
+        // Continue with the next note
+      }
+    }
+    
+    return {
+      isSuccess: true,
+      message: `Generated location information for ${updatedCount} existing notes`,
+      data: updatedCount
+    };
+  } catch (error) {
+    console.error("Error generating locations for existing notes:", error);
+    return { 
+      isSuccess: false, 
+      message: `Failed to generate locations: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}
+*/ 

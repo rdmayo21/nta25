@@ -97,7 +97,10 @@ export default function NotesTab({ userId }: NotesTabProps) {
           <div className="mt-2 space-y-4">
             {selectedNote && (
               <>
-                <audio src={selectedNote.audioUrl} controls className="w-full" />
+                {/* Removed audio element */}
+                {/* <audio src={selectedNote.audioUrl} controls className="w-full" /> */}
+                
+                {/* Overview Section */}
                 {selectedNote.overview ? (
                   <div className="rounded-md bg-primary/10 p-4 text-sm">
                     <p className="font-medium">Overview</p>
@@ -106,7 +109,10 @@ export default function NotesTab({ userId }: NotesTabProps) {
                 ) : (
                   <p className="text-sm text-muted-foreground italic">Overview not available.</p>
                 )}
+                
+                {/* Transcription Section */}
                 <div className="max-h-60 overflow-y-auto rounded-md border p-4 text-sm">
+                  <p className="font-medium mb-2">Transcription</p>
                   <p>{selectedNote.transcription}</p>
                 </div>
               </>

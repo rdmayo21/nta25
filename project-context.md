@@ -2,7 +2,7 @@
 
 ## Overview
 
-VoxJournal is a web application that allows users to record, transcribe, and analyze voice notes. It offers a streamlined journaling experience where users can easily capture their thoughts via voice, review transcriptions, and get AI-generated overviews from their recordings. 
+VoxJournal is a web application that allows users to record, transcribe, and analyze voice notes. It offers a streamlined journaling experience where users can easily capture their thoughts via voice, review and **edit** transcriptions, and get AI-generated overviews from their recordings. **Audio is only stored temporarily during processing and is not available for playback.**
 
 ## Tech Stack
 
@@ -10,19 +10,21 @@ VoxJournal is a web application that allows users to record, transcribe, and ana
 - **Backend**: Next.js Server Actions, Drizzle ORM
 - **Database**: PostgreSQL hosted on Supabase
 - **Authentication**: Clerk
-- **AI Services**: OpenAI (for generating overviews), Deepgram (for transcription)
+- **AI Services**: OpenAI (for generating overviews and titles), Deepgram (for transcription)
+- **Storage**: Supabase Storage (for temporary audio file uploads)
 - **Payments**: Stripe (integration ready)
 - **Analytics**: PostHog (integration ready)
 - **Deployment**: Vercel
 
 ## Key Features
 
-1. **Voice Recording**: Record voice notes directly in the browser
-2. **Automatic Transcription**: Audio recordings are automatically transcribed using Deepgram
-3. **Note Overview**: AI-powered generation of a concise overview for each note
-4. **Favorites**: Mark voice notes as favorites for easy access
-5. **Chat Interface**: Interact with your journal entries via chat
-6. **Insights Analysis**: Get overall analysis of trends and patterns in your journaling
+1.  **Voice Recording**: Record voice notes directly in the browser (up to 1 hour per recording)
+2.  **Automatic Transcription**: Audio recordings are automatically transcribed using Deepgram
+3.  **Transcription Editing**: Users can edit the generated transcription after creation
+4.  **Note Overview**: AI-powered generation of a concise overview for each note
+5.  **Favorites**: Mark voice notes as favorites for easy access
+6.  **Chat Interface**: Interact with your journal entries via chat
+7.  **Insights Analysis**: Get overall analysis of trends and patterns in your journaling
 
 ## Project Structure
 
@@ -30,6 +32,8 @@ VoxJournal is a web application that allows users to record, transcribe, and ana
 /
 ├── actions/                 # Server actions
 │   ├── api-actions.ts       # API-related actions (OpenAI, Deepgram)
+│   ├── storage/             # Storage-related actions
+│   │   └── storage-actions.ts # Upload/delete actions for Supabase Storage
 │   └── db/                  # Database-related actions
 │       └── voice-notes-actions.ts # CRUD operations for voice notes
 ├── app/                     # Next.js App Router
@@ -50,11 +54,11 @@ VoxJournal is a web application that allows users to record, transcribe, and ana
 ├── components/              # Shared components
 │   ├── ui/                  # UI components (Shadcn)
 │   ├── voice-recorder.tsx   # Voice recording component
-│   └── voice-notes-list.tsx # List of voice notes
+│   └── voice-notes-list.tsx # List of voice notes (with editing)
 ├── db/                      # Database configuration
 │   ├── db.ts                # Database connection
 │   └── schema/              # Database schema
-│       ├── voice-notes-schema.ts # Voice notes table schema
+│       ├── voice-notes-schema.ts # Voice notes table schema (no audioUrl)
 │       ├── profiles-schema.ts    # User profiles table schema
 │       └── chat-messages-schema.ts # Chat messages table schema
 └── lib/                     # Utility functions and libraries
@@ -63,16 +67,16 @@ VoxJournal is a web application that allows users to record, transcribe, and ana
 
 ## Database Schema
 
-### Voice Notes Table
+### Voice Notes Table (Updated)
+*The `audioUrl` column has been removed.*
 ```typescript
 export const voiceNotesTable = pgTable("voice_notes", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: text("user_id").notNull(),
   title: text("title").notNull(),
-  audioUrl: text("audio_url").notNull(),
   transcription: text("transcription").notNull(),
   overview: text("overview"),
-  duration: integer("duration").notNull(),
+  duration: integer("duration").notNull(), // Duration in seconds
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
@@ -118,46 +122,52 @@ export const chatMessagesTable = pgTable("chat_messages", {
 3. The app uses Clerk's userId to associate voice notes with specific users
 4. Protected routes check for authentication using Clerk middleware
 
-## Voice Recording Flow
+## Voice Recording Flow (Updated)
 
-1. User clicks on the floating microphone button in the Notes tab
-2. Audio is recorded using the browser's MediaRecorder API
-3. On recording completion, the audio is:
-   - Uploaded to storage
-   - Sent to Deepgram for transcription
-   - Saved to the database with its transcription
-4. The list of voice notes is refreshed to show the new entry
+1.  User clicks on the floating microphone button in the Notes tab.
+2.  Audio is recorded using the browser's MediaRecorder API (max 1 hour).
+3.  On recording completion, the audio blob is:
+    a.  Uploaded to a temporary location in Supabase Storage.
+    b.  Sent to Deepgram for transcription (client-side or via API action).
+    c.  An AI-generated title is created (server-side).
+    d.  A server action (`createVoiceNoteAction`) is called with user ID, title, transcription, duration, temporary audio path, and bucket name.
+    e.  The server action saves the note details (title, transcription, overview, duration, etc.) to the database.
+    f.  The server action triggers the deletion of the temporary audio file from Supabase Storage.
+4.  The list of voice notes is refreshed to show the new entry.
 
 ## AI Integration
 
-1. **Transcription**: Uses Deepgram's API to convert audio to text
-2. **Note Overview**: OpenAI is used to generate a concise overview from voice note transcriptions
-3. **Chat**: The chat interface uses OpenAI to provide conversational interaction with the user's journal entries
+1.  **Transcription**: Uses Deepgram's API to convert audio to text.
+2.  **Note Overview & Title**: OpenAI is used to generate a concise overview and a title from voice note transcriptions. Generated titles are cleaned to remove surrounding quotes.
+3.  **Chat**: The chat interface uses OpenAI to provide conversational interaction with the user's journal entries.
 
 ## User Interface Components
 
 ### Voice Recorder
-A component that handles recording audio, showing recording status, and processing the recording on completion.
+A component that handles recording audio (up to 1 hour), showing recording status, uploading the temporary audio file, triggering transcription, and initiating the save process.
 
 ### Voice Notes List
 Displays the list of voice notes with options to:
-- Play/pause audio
-- Mark as favorite
-- Delete notes
-- View detailed transcriptions and the generated overview
+- Edit the transcription inline.
+- Mark as favorite.
+- Delete notes.
+- View the generated overview or truncated transcription.
+- **(No audio playback capability)**
 
 ### Tabs Interface
 The main journal interface is divided into three tabs:
-1. **Notes**: For recording and reviewing voice notes
-2. **Chat**: For conversational interaction with journal content
-3. **Insights**: For analysis and patterns across all journal entries
+1.  **Notes**: For recording and reviewing/editing voice notes.
+2.  **Chat**: For conversational interaction with journal content.
+3.  **Insights**: For analysis and patterns across all journal entries.
 
-## Current Issues and Considerations
+## Current Issues and Considerations (Updated)
 
-1. **Scrolling in Lists**: The voice notes list needs proper overflow handling to ensure users can scroll through all entries
-2. **Mobile Optimization**: The UI is responsive but may benefit from additional mobile-specific optimizations
-3. **Storage Handling**: Audio file management could be improved with better lifecycle policies
-4. **Performance**: Large numbers of voice notes may require pagination or virtualized lists
+1.  **Scrolling in Lists**: The voice notes list needs proper overflow handling.
+2.  **Mobile Optimization**: UI may benefit from further mobile optimization.
+3.  **Storage Handling**: Temporary audio file deletion relies on server action success; consider cleanup mechanisms for orphaned files.
+4.  **Performance**: Large numbers of voice notes may require pagination or virtualized lists.
+5.  **Transcription Error Handling**: If transcription fails after upload, the temporary file should be cleaned up.
+6.  **Env Variables:** Ensure `NEXT_PUBLIC_SUPABASE_AUDIO_BUCKET` is set in the environment.
 
 ## Adding New Features
 
@@ -170,13 +180,15 @@ When implementing new features, consider:
 5. **Error Handling**: Implement proper error handling and user feedback
 6. **AI Integration**: Consider how to leverage OpenAI or other AI services to enhance the feature
 
-## Environment Variables
+## Environment Variables (Updated)
 
 The app relies on several environment variables:
 - `DATABASE_URL`: PostgreSQL connection string
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`: For authentication
 - `DEEPGRAM_API_KEY`: For audio transcription
-- `OPENAI_API_KEY`: For AI-powered features (like overviews and chat)
+- `OPENAI_API_KEY`: For AI-powered features (overviews, titles, chat)
+- `NEXT_PUBLIC_SUPABASE_AUDIO_BUCKET`: Name of the Supabase bucket for temporary audio storage.
+- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_ANON_KEY` depending on client usage): For Supabase Storage interactions.
 
 ## Potential Future Features
 

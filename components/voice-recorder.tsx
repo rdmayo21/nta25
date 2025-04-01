@@ -7,13 +7,17 @@ import { Card, CardContent } from "@/components/ui/card"
 import { toast } from "sonner"
 import { createVoiceNoteAction } from "@/actions/db/voice-notes-actions"
 import { transcribeAudioAction, generateTitleAction } from "@/actions/api-actions"
+import { uploadFileStorageAction, deleteFileStorageAction } from "@/actions/storage/storage-actions"
 import { cn } from "@/lib/utils"
+import { v4 as uuidv4 } from 'uuid';
 
 interface VoiceRecorderProps {
   userId: string
   onRecordingComplete?: () => void
   floating?: boolean
 }
+
+const MAX_RECORDING_DURATION_SECONDS = 3600; // 1 hour
 
 export default function VoiceRecorder({ userId, onRecordingComplete, floating = false }: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false)
@@ -47,7 +51,7 @@ export default function VoiceRecorder({ userId, onRecordingComplete, floating = 
         // Automatically process the recording when it stops
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" })
         audioChunksRef.current = []
-        await processRecording(audioBlob)
+        await processRecording(audioBlob, recordingTime)
       }
       
       audioChunksRef.current = []
@@ -82,66 +86,96 @@ export default function VoiceRecorder({ userId, onRecordingComplete, floating = 
     }
   }
   
-  const processRecording = async (audioBlob: Blob) => {
+  const processRecording = async (audioBlob: Blob, duration: number) => {
+    const bucketName = process.env.NEXT_PUBLIC_SUPABASE_AUDIO_BUCKET;
+    if (!bucketName) {
+      toast.error("Bucket name not found in environment variables")
+      return;
+    }
+    
+    let audioPath: string | undefined = undefined; // Define here to use in cleanup
+    
     try {
-      setProcessingStatus("Transcribing...")
+      // 1. Generate a unique filename and path
+      const uniqueFilename = `${uuidv4()}.webm`;
+      audioPath = `${userId}/temp-audio/${uniqueFilename}`; // Assign path here
       
-      // Step 1: Transcribe the audio
-      const transcriptionResult = await transcribeAudioAction(audioBlob)
+      // Create a File object from the Blob
+      const audioFile = new File([audioBlob], uniqueFilename, { type: audioBlob.type });
+      
+      // 2. Upload temporary audio file
+      setProcessingStatus("Uploading audio...");
+      // Pass the audioFile instead of audioBlob
+      const uploadResult = await uploadFileStorageAction(bucketName, audioPath, audioFile);
+      
+      if (!uploadResult.isSuccess || !uploadResult.data?.path) {
+        toast.error(`Audio upload failed: ${uploadResult.message}`);
+        audioPath = undefined; // Prevent cleanup attempt if upload failed
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Use the confirmed path from the result for consistency, though it should match audioPath
+      audioPath = uploadResult.data.path;
+      console.log("Audio uploaded to temp path:", audioPath);
+      
+      // 3. Transcribe the audio
+      setProcessingStatus("Transcribing...");
+      // Pass the audioFile here as well if the action expects File, or keep Blob if it handles Blob
+      // Assuming transcribeAudioAction can handle the Blob directly based on previous code
+      const transcriptionResult = await transcribeAudioAction(audioBlob);
       
       if (!transcriptionResult.isSuccess) {
-        toast.error(transcriptionResult.message)
-        setIsProcessing(false)
-        return
+        toast.error(`Transcription failed: ${transcriptionResult.message}`);
+        // Cleanup attempted using the confirmed audioPath
+        if (audioPath) { // Check if upload was successful before trying delete
+          deleteFileStorageAction(bucketName, audioPath).catch((err: Error) => console.error("Failed cleanup upload on transcription error:", err));
+        }
+        setIsProcessing(false);
+        return;
       }
       
-      const transcription = transcriptionResult.transcription || "No transcription available"
+      const transcription = transcriptionResult.transcription || "No transcription generated.";
       
-      // Step 2: Generate a title using GPT-4o mini
-      setProcessingStatus("Generating title...")
-      const titleResult = await generateTitleAction(transcription)
-      
+      // 4. Generate a title
+      setProcessingStatus("Generating title...");
+      const titleResult = await generateTitleAction(transcription);
+      const title = titleResult.isSuccess ? (titleResult.title || "Untitled Note") : "Untitled Note";
       if (!titleResult.isSuccess) {
-        toast.error(titleResult.message)
-        setIsProcessing(false)
-        return
+        console.warn(`Title generation failed: ${titleResult.message}, using default.`);
       }
       
-      const title = titleResult.title || "Untitled Voice Note"
-      
-      // Step 3: Create a URL for the audio blob
-      const audioUrl = URL.createObjectURL(audioBlob)
-      
-      // Step 4: Save the voice note
-      setProcessingStatus("Saving...")
-      
-      // Do not include duration field until database is updated
+      // 5. Save the voice note (Server action handles deletion of temp file using audioPath)
+      setProcessingStatus("Saving note...");
       const result = await createVoiceNoteAction({
         userId,
         title,
-        audioUrl, // In a real app, you'd upload to storage first and save the URL
-        transcription
-        // duration: recordingTime // Uncomment once database is updated
-      })
+        transcription,
+        duration,
+        audioPath: audioPath, // Pass the confirmed path
+        bucketName: bucketName
+      });
       
       if (result.isSuccess) {
-        toast.success("Voice note saved: " + title)
-        
-        // Clean up the URL
-        URL.revokeObjectURL(audioUrl)
-        
+        toast.success(`Voice note saved: ${result.data.title}`);
         if (onRecordingComplete) {
-          onRecordingComplete()
+          onRecordingComplete();
         }
       } else {
-        toast.error(result.message)
+        toast.error(`Failed to save note: ${result.message}`);
+        // Log potential orphaned file
+        console.error("Saving note failed. The temporary audio file might still exist:", audioPath);
       }
     } catch (error) {
-      console.error("Error processing recording:", error)
-      toast.error("Failed to process recording")
+      console.error("Error processing recording:", error);
+      toast.error(`An unexpected error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Attempt cleanup if path exists
+      if (audioPath) { // Check if upload might have succeeded before the error
+         deleteFileStorageAction(bucketName, audioPath).catch((err: Error) => console.error("Failed cleanup upload on general error:", err));
+      }
     } finally {
-      setIsProcessing(false)
-      setProcessingStatus("")
+      setIsProcessing(false);
+      setProcessingStatus("");
     }
   }
   

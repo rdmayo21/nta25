@@ -5,63 +5,74 @@ import { InsertVoiceNote, SelectVoiceNote, voiceNotesTable } from "@/db/schema"
 import { ActionState } from "@/types"
 import { eq, desc } from "drizzle-orm"
 import { auth } from "@clerk/nextjs/server"
-import { generateOverviewAction } from "@/actions/api-actions"
-import { analyzeThemesAction } from "@/actions/api-actions"
-import { extractLocationAction } from "@/actions/api-actions"
+import { generateOverviewAction, analyzeThemesAction, extractLocationAction } from "@/actions/api-actions"
+import { deleteFileStorageAction } from "../storage/storage-actions"
+
+interface CreateVoiceNoteInput {
+  userId: string
+  title: string
+  transcription: string
+  duration: number
+  audioPath: string
+  bucketName: string
+}
 
 export async function createVoiceNoteAction(
-  voiceNote: InsertVoiceNote
+  data: CreateVoiceNoteInput
 ): Promise<ActionState<SelectVoiceNote>> {
   try {
-    // Generate overview if transcription is available
-    let overview = undefined;
-    // Comment out location until database is updated
-    // let location = undefined;
-    
-    if (voiceNote.transcription) {
+    const { userId, title, transcription, duration, audioPath, bucketName } = data
+
+    // 1. Clean the title (remove surrounding quotes and trim)
+    const cleanedTitle = title.replace(/^\"|\"$/g, '').trim()
+
+    // 2. Generate overview if transcription is available
+    let overview: string | undefined = undefined
+    if (transcription) {
       try {
-        // Generate overview
-        const overviewResult = await generateOverviewAction(voiceNote.transcription);
+        const overviewResult = await generateOverviewAction(transcription)
         if (overviewResult.isSuccess && overviewResult.overview) {
-          overview = overviewResult.overview;
+          // Clean the overview as well (optional, but good practice)
+          overview = overviewResult.overview.replace(/^\"|\"$/g, '').trim()
         } else {
-          console.log(`Could not generate overview: ${overviewResult.message}`);
+          console.log(`Could not generate overview: ${overviewResult.message}`)
         }
-        
-        // Comment out location extraction until database is updated
-        /* 
-        // Extract location
-        const locationResult = await extractLocationAction(voiceNote.transcription);
-        if (locationResult.isSuccess && locationResult.location) {
-          location = locationResult.location;
-          console.log(`Extracted location: ${location}`);
-        } else {
-          console.log(`No location found: ${locationResult.message}`);
-        }
-        */
       } catch (error) {
-        console.error("Error generating overview (continuing anyway):", error);
+        console.error("Error generating overview (continuing anyway):", error)
       }
     }
-    
-    // Create object without location and duration fields
-    const insertData = {
-      ...voiceNote,
-      overview,
-      // location,  // Remove until database is updated
-      // duration: 0 // Remove until database is updated
-    };
-    
-    // Remove duration property if it exists in the incoming data
-    if ('duration' in insertData) {
-      delete insertData.duration;
+
+    // 3. Prepare data for DB insertion (no audioUrl)
+    const insertData: InsertVoiceNote = {
+      userId,
+      title: cleanedTitle,
+      transcription,
+      duration,
+      overview // Will be null if not generated
+      // createdAt and updatedAt are handled by the DB
     }
-    
+
+    // 4. Insert into Database
     const [newVoiceNote] = await db
       .insert(voiceNotesTable)
       .values(insertData)
       .returning()
-    
+
+    // 5. Delete the temporary audio file from storage (fire-and-forget approach for now)
+    // We don't necessarily want to fail the whole operation if deletion fails,
+    // but we should log it.
+    deleteFileStorageAction(bucketName, audioPath)
+      .then(result => {
+        if (!result.isSuccess) {
+          console.error(`Failed to delete temporary audio file ${audioPath} from bucket ${bucketName}: ${result.message}`)
+        } else {
+          console.log(`Successfully deleted temporary audio file: ${audioPath}`)
+        }
+      })
+      .catch(error => {
+        console.error(`Error calling deleteFileStorageAction for ${audioPath}:`, error)
+      })
+
     return {
       isSuccess: true,
       message: "Voice note created successfully",
@@ -69,9 +80,11 @@ export async function createVoiceNoteAction(
     }
   } catch (error) {
     console.error("Error creating voice note:", error)
-    return { 
-      isSuccess: false, 
-      message: `Failed to create voice note: ${error instanceof Error ? error.message : String(error)}` 
+    // Extract the audioPath for logging if available in the error context or data
+    const pathInfo = typeof data === 'object' && data?.audioPath ? ` (related audio path: ${data.audioPath})` : ''
+    return {
+      isSuccess: false,
+      message: `Failed to create voice note${pathInfo}: ${error instanceof Error ? error.message : String(error)}`
     }
   }
 }
@@ -119,17 +132,87 @@ export async function getVoiceNoteAction(
   }
 }
 
-export async function updateVoiceNoteAction(
+export async function updateVoiceNoteTranscriptionAction(
   id: string,
-  data: Partial<InsertVoiceNote>
+  newTranscription: string
 ): Promise<ActionState<SelectVoiceNote>> {
   try {
+    const { userId } = await auth()
+    if (!userId) {
+      return { isSuccess: false, message: "Authentication required" }
+    }
+
+    // Optional: Add logic to check if the note belongs to the user
+    const existingNote = await db.query.voiceNotes.findFirst({
+      where: eq(voiceNotesTable.id, id)
+    })
+
+    if (!existingNote) {
+      return { isSuccess: false, message: "Voice note not found" }
+    }
+
+    if (existingNote.userId !== userId) {
+      return { isSuccess: false, message: "Unauthorized to update this voice note" }
+    }
+
+    // Perform the update
     const [updatedVoiceNote] = await db
       .update(voiceNotesTable)
-      .set(data)
+      .set({
+        transcription: newTranscription,
+        updatedAt: new Date() // Manually update the timestamp
+      })
       .where(eq(voiceNotesTable.id, id))
       .returning()
-    
+
+    // Potentially regenerate overview after transcription update? (optional)
+    // For now, just update transcription.
+
+    return {
+      isSuccess: true,
+      message: "Transcription updated successfully",
+      data: updatedVoiceNote
+    }
+  } catch (error) {
+    console.error("Error updating voice note transcription:", error)
+    return {
+      isSuccess: false,
+      message: `Failed to update transcription: ${error instanceof Error ? error.message : String(error)}`
+    }
+  }
+}
+
+export async function updateVoiceNoteAction(
+  id: string,
+  data: Partial<Omit<InsertVoiceNote, 'transcription' | 'userId' | 'createdAt' | 'id'>> // Exclude transcription etc.
+): Promise<ActionState<SelectVoiceNote>> {
+  try {
+    const { userId } = await auth()
+    if (!userId) {
+      return { isSuccess: false, message: "Authentication required" }
+    }
+
+    // Verify ownership before update
+    const existingNote = await db.query.voiceNotes.findFirst({ where: eq(voiceNotesTable.id, id) })
+    if (!existingNote) {
+      return { isSuccess: false, message: "Voice note not found" }
+    }
+    if (existingNote.userId !== userId) {
+      return { isSuccess: false, message: "Unauthorized to update this voice note" }
+    }
+
+    // Clean title if present in update data
+    const updateData = { ...data }
+    if (updateData.title) {
+      updateData.title = updateData.title.replace(/^\"|\"$/g, '').trim()
+    }
+
+    const [updatedVoiceNote] = await db
+      .update(voiceNotesTable)
+      .set({ ...updateData, updatedAt: new Date() }) // Ensure updatedAt is updated
+      .where(eq(voiceNotesTable.id, id))
+      .returning()
+
     return {
       isSuccess: true,
       message: "Voice note updated successfully",
@@ -137,7 +220,7 @@ export async function updateVoiceNoteAction(
     }
   } catch (error) {
     console.error("Error updating voice note:", error)
-    return { isSuccess: false, message: "Failed to update voice note" }
+    return { isSuccess: false, message: `Failed to update voice note: ${error instanceof Error ? error.message : String(error)}` }
   }
 }
 
@@ -158,103 +241,12 @@ export async function deleteVoiceNoteAction(
   }
 }
 
-export async function saveVoiceNoteAction(data: {
-  content: string,
-  title?: string,
-  audioUrl?: string,
-  duration?: number
-}): Promise<ActionState<SelectVoiceNote>> {
-  try {
-    const { userId } = await auth();
-    
-    if (!userId) {
-      console.error("No user ID found in auth context");
-      return { isSuccess: false, message: "Authentication required" };
-    }
-    
-    console.log("Saving voice note for user:", userId);
-    
-    if (!data.content) {
-      return { isSuccess: false, message: "Voice note content is required" };
-    }
-    
-    console.log("Voice note content length:", data.content.length);
-    
-    // Generate overview (comment out location until database is updated)
-    let overview = undefined;
-    // let location = undefined;
-    
-    try {
-      // Generate overview
-      const overviewResult = await generateOverviewAction(data.content);
-      if (overviewResult.isSuccess && overviewResult.overview) {
-        overview = overviewResult.overview;
-        console.log("Generated overview:", overview);
-      } else {
-        console.log("Could not generate overview:", overviewResult.message);
-      }
-      
-      /* Comment out location extraction until database is updated
-      // Extract location
-      const locationResult = await extractLocationAction(data.content);
-      if (locationResult.isSuccess && locationResult.location) {
-        location = locationResult.location;
-        console.log("Extracted location:", location);
-      } else {
-        console.log("No location found:", locationResult.message);
-      }
-      */
-    } catch (error) {
-      console.error("Error generating overview (continuing anyway):", error);
-    }
-    
-    // Make sure we have all required fields, omitting location and duration until DB is updated
-    const noteData = {
-      userId,
-      transcription: data.content,
-      title: data.title || "Untitled Voice Note",
-      audioUrl: data.audioUrl || "",
-      // duration: data.duration || 0, // Omit until database is updated
-      overview,
-      // location
-    };
-    
-    console.log("Saving note with data:", {
-      ...noteData,
-      transcription: noteData.transcription.substring(0, 50) + "..." // Log only beginning for brevity
-    });
-    
-    const [newNote] = await db.insert(voiceNotesTable)
-      .values(noteData)
-      .returning();
-      
-    console.log("Saved voice note:", {
-      id: newNote.id,
-      title: newNote.title,
-      hasOverview: !!newNote.overview
-      // hasLocation: !!newNote.location
-    });
-    
-    return {
-      isSuccess: true,
-      message: "Voice note saved successfully",
-      data: newNote
-    };
-  } catch (error) {
-    console.error("Error saving voice note:", error);
-    return { 
-      isSuccess: false, 
-      message: `Failed to save voice note: ${error instanceof Error ? error.message : String(error)}` 
-    };
-  }
-}
-
 export async function analyzeVoiceNoteThemesAction(
   userId: string
 ): Promise<ActionState<Array<{ theme: string; description: string; noteCount: number }>>> {
   try {
     // Get all the user's voice notes
-    const { isSuccess, data: notes, message } = await getVoiceNotesAction(userId);
+    const { isSuccess, data: notes, message } = await getVoiceNotesAction(userId)
     
     if (!isSuccess || !notes || notes.length === 0) {
       return { 
@@ -262,30 +254,30 @@ export async function analyzeVoiceNoteThemesAction(
         message: notes && notes.length === 0 
           ? "No voice notes found to analyze" 
           : `Failed to retrieve notes: ${message}` 
-      };
+      }
     }
     
     // Extract transcriptions from the notes
-    const transcriptions = notes.map(note => note.transcription);
+    const transcriptions = notes.map(note => note.transcription)
     
     // Use the OpenAI API to analyze themes
-    const { isSuccess: analysisSuccess, themes, message: analysisMessage } = await analyzeThemesAction(transcriptions);
+    const { isSuccess: analysisSuccess, themes, message: analysisMessage } = await analyzeThemesAction(transcriptions)
     
     if (!analysisSuccess || !themes) {
-      return { isSuccess: false, message: `Failed to analyze themes: ${analysisMessage}` };
+      return { isSuccess: false, message: `Failed to analyze themes: ${analysisMessage}` }
     }
     
     return {
       isSuccess: true,
       message: "Themes analyzed successfully",
       data: themes
-    };
+    }
   } catch (error) {
-    console.error("Error analyzing voice note themes:", error);
+    console.error("Error analyzing voice note themes:", error)
     return { 
       isSuccess: false, 
       message: `Failed to analyze themes: ${error instanceof Error ? error.message : String(error)}`
-    };
+    }
   }
 }
 
@@ -295,33 +287,33 @@ export async function generateLocationsForExistingNotesAction(
   userId: string
 ): Promise<ActionState<number>> {
   try {
-    const { isSuccess, data: notes, message } = await getVoiceNotesAction(userId);
+    const { isSuccess, data: notes, message } = await getVoiceNotesAction(userId)
     
     if (!isSuccess || !notes) {
-      return { isSuccess: false, message: `Failed to retrieve notes: ${message}` };
+      return { isSuccess: false, message: `Failed to retrieve notes: ${message}` }
     }
     
-    const notesWithoutLocations = notes.filter(note => !note.location);
+    const notesWithoutLocations = notes.filter(note => !note.location)
     
     if (notesWithoutLocations.length === 0) {
-      return { isSuccess: true, message: "No notes without location information found", data: 0 };
+      return { isSuccess: true, message: "No notes without location information found", data: 0 }
     }
     
-    let updatedCount = 0;
+    let updatedCount = 0
     
     for (const note of notesWithoutLocations) {
       try {
-        const locationResult = await extractLocationAction(note.transcription);
+        const locationResult = await extractLocationAction(note.transcription)
         
         if (locationResult.isSuccess && locationResult.location) {
           await db.update(voiceNotesTable)
             .set({ location: locationResult.location })
-            .where(eq(voiceNotesTable.id, note.id));
+            .where(eq(voiceNotesTable.id, note.id))
           
-          updatedCount++;
+          updatedCount++
         }
       } catch (error) {
-        console.error(`Error generating location for note ${note.id}:`, error);
+        console.error(`Error generating location for note ${note.id}:`, error)
         // Continue with the next note
       }
     }
@@ -330,13 +322,13 @@ export async function generateLocationsForExistingNotesAction(
       isSuccess: true,
       message: `Generated location information for ${updatedCount} existing notes`,
       data: updatedCount
-    };
+    }
   } catch (error) {
-    console.error("Error generating locations for existing notes:", error);
+    console.error("Error generating locations for existing notes:", error)
     return { 
       isSuccess: false, 
       message: `Failed to generate locations: ${error instanceof Error ? error.message : String(error)}`
-    };
+    }
   }
 }
 */ 

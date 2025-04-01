@@ -1,15 +1,16 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { SelectVoiceNote } from "@/db/schema"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { getVoiceNotesAction, deleteVoiceNoteAction } from "@/actions/db/voice-notes-actions"
+import { getVoiceNotesAction, deleteVoiceNoteAction, updateVoiceNoteTranscriptionAction } from "@/actions/db/voice-notes-actions"
 import { toast } from "sonner"
 import { formatDistanceToNow } from "date-fns"
-import { Trash2, Play, Pause, Star } from "lucide-react"
+import { Trash2, Star, Edit, Save, X, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
 
 interface VoiceNotesListProps {
   userId: string
@@ -20,9 +21,11 @@ export default function VoiceNotesList({ userId, onSelect }: VoiceNotesListProps
   const [notes, setNotes] = useState<SelectVoiceNote[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
-  const [playingNote, setPlayingNote] = useState<string | null>(null)
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
   const [favorites, setFavorites] = useState<string[]>([])
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [editingText, setEditingText] = useState("")
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     loadNotes()
@@ -33,15 +36,6 @@ export default function VoiceNotesList({ userId, onSelect }: VoiceNotesListProps
       setFavorites(JSON.parse(savedFavorites))
     }
   }, [userId])
-
-  useEffect(() => {
-    // Clean up audio on unmount
-    return () => {
-      if (audioElement) {
-        audioElement.pause()
-      }
-    }
-  }, [audioElement])
 
   const loadNotes = async () => {
     setIsLoading(true)
@@ -85,32 +79,6 @@ export default function VoiceNotesList({ userId, onSelect }: VoiceNotesListProps
     }
   }
 
-  const handlePlayPause = (note: SelectVoiceNote) => {
-    if (playingNote === note.id) {
-      // Pause currently playing note
-      if (audioElement) {
-        audioElement.pause()
-        setPlayingNote(null)
-      }
-    } else {
-      // Stop any currently playing audio
-      if (audioElement) {
-        audioElement.pause()
-      }
-      
-      // Play selected note
-      const audio = new Audio(note.audioUrl)
-      audio.onended = () => setPlayingNote(null)
-      audio.play().catch(err => {
-        console.error("Error playing audio:", err)
-        toast.error("Could not play audio")
-      })
-      
-      setAudioElement(audio)
-      setPlayingNote(note.id)
-    }
-  }
-  
   const toggleFavorite = (id: string) => {
     let newFavorites: string[]
     
@@ -127,6 +95,38 @@ export default function VoiceNotesList({ userId, onSelect }: VoiceNotesListProps
   const truncateText = (text: string, maxLength: number = 100) => {
     if (text.length <= maxLength) return text
     return text.substring(0, maxLength) + "..."
+  }
+  
+  const handleEditClick = (note: SelectVoiceNote) => {
+    setEditingNoteId(note.id)
+    setEditingText(note.transcription)
+    setTimeout(() => textareaRef.current?.focus(), 0)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingNoteId(null)
+    setEditingText("")
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingNoteId || !editingText) return
+
+    setIsSavingEdit(true)
+    try {
+      const result = await updateVoiceNoteTranscriptionAction(editingNoteId, editingText)
+      if (result.isSuccess) {
+        toast.success("Transcription updated")
+        setNotes(notes.map(n => n.id === editingNoteId ? { ...n, transcription: editingText, updatedAt: new Date() } : n))
+        handleCancelEdit()
+      } else {
+        toast.error(`Failed to update: ${result.message}`)
+      }
+    } catch (error) {
+      console.error("Error saving transcription edit:", error)
+      toast.error("An error occurred while saving")
+    } finally {
+      setIsSavingEdit(false)
+    }
   }
   
   if (isLoading) {
@@ -186,25 +186,24 @@ export default function VoiceNotesList({ userId, onSelect }: VoiceNotesListProps
                 )}
               </div>
               <div className="flex gap-1">
-                <Button 
-                  size="icon" 
-                  variant="ghost"
-                  onClick={() => handlePlayPause(note)}
-                  title={playingNote === note.id ? "Pause" : "Play"}
-                  className="h-8 w-8"
-                >
-                  {playingNote === note.id ? (
-                    <Pause className="h-4 w-4" />
-                  ) : (
-                    <Play className="h-4 w-4" />
-                  )}
-                </Button>
+                {editingNoteId !== note.id && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => handleEditClick(note)}
+                    title="Edit Transcription"
+                    className="h-8 w-8"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                )}
                 <Button
                   size="icon"
                   variant="ghost"
                   onClick={() => toggleFavorite(note.id)}
                   title={favorites.includes(note.id) ? "Remove from favorites" : "Add to favorites"}
                   className="h-8 w-8"
+                  disabled={editingNoteId === note.id}
                 >
                   <Star className={`h-4 w-4 ${favorites.includes(note.id) ? "fill-primary text-primary" : ""}`} />
                 </Button>
@@ -212,7 +211,7 @@ export default function VoiceNotesList({ userId, onSelect }: VoiceNotesListProps
                   size="icon"
                   variant="ghost"
                   onClick={() => handleDelete(note.id)}
-                  disabled={isDeleting === note.id}
+                  disabled={isDeleting === note.id || editingNoteId === note.id}
                   title="Delete"
                   className="h-8 w-8"
                 >
@@ -222,25 +221,69 @@ export default function VoiceNotesList({ userId, onSelect }: VoiceNotesListProps
             </div>
             <CardDescription className="text-xs">
               {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
+              {note.updatedAt && new Date(note.updatedAt).getTime() !== new Date(note.createdAt).getTime() && (
+                <span className="italic">(edited {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })})</span>
+              )}
             </CardDescription>
           </CardHeader>
           
           <CardContent className="px-4 pb-4 pt-0">
-            <div
-              className="line-clamp-3 text-sm text-muted-foreground cursor-pointer"
-              onClick={() => onSelect?.(note)}
-            >
-              {note.overview ? (
-                <>
-                  <span className="font-medium text-xs text-primary">
-                    Overview:
-                  </span>{" "}
-                  {truncateText(note.overview, 120)}
-                </>
-              ) : (
-                truncateText(note.transcription)
-              )}
-            </div>
+            {editingNoteId === note.id ? (
+              <div className="space-y-2 mt-2">
+                <Textarea
+                  ref={textareaRef}
+                  value={editingText}
+                  onChange={(e) => setEditingText(e.target.value)}
+                  rows={5}
+                  className="text-sm"
+                  disabled={isSavingEdit}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleCancelEdit}
+                    disabled={isSavingEdit}
+                  >
+                    <X className="h-4 w-4 mr-1" /> Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveEdit}
+                    disabled={isSavingEdit || editingText === note.transcription}
+                  >
+                    {isSavingEdit ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-1" />
+                    )}
+                    Save
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div
+                className="line-clamp-3 text-sm text-muted-foreground cursor-pointer"
+                onClick={() => onSelect?.(note)}
+                title="Click to view full note (if applicable)"
+              >
+                {note.overview ? (
+                  <>
+                    <span className="font-medium text-xs text-primary block mb-1">
+                      Overview:
+                    </span>
+                    {truncateText(note.overview, 150)}
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium text-xs text-primary block mb-1">
+                      Transcription:
+                    </span>
+                    {truncateText(note.transcription, 150)}
+                  </>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       ))}

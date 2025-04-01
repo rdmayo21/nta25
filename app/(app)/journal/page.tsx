@@ -19,11 +19,14 @@ export default function JournalPage() {
 
   const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     const { offset, velocity } = info
-    const swipePower = Math.abs(offset.x) * velocity.x
+    const swipeDistance = offset.x
+    const swipeVelocity = velocity.x
 
-    if (swipePower < -swipeThreshold * swipeVelocityThreshold && offset.x < -swipeThreshold) {
+    // Swipe Left (Next tab - Chat)
+    if (swipeDistance < -swipeThreshold && swipeVelocity < -swipeVelocityThreshold) {
       setActiveTab("chat")
-    } else if (swipePower > swipeThreshold * swipeVelocityThreshold && offset.x > swipeThreshold) {
+    // Swipe Right (Previous tab - Notes)
+    } else if (swipeDistance > swipeThreshold && swipeVelocity > swipeVelocityThreshold) {
       setActiveTab("notes")
     }
   }

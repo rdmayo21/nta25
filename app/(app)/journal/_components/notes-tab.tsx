@@ -52,8 +52,8 @@ export default function NotesTab({ userId }: NotesTabProps) {
   }
   
   return (
-    <div className="relative flex flex-col">
-      <div className="flex justify-end mb-2 flex-none gap-2">
+    <div className="relative flex flex-col h-full">
+      <div className="flex justify-end flex-none gap-2">
         {/* Comment out until database is updated
         <Button
           size="sm"
@@ -67,7 +67,7 @@ export default function NotesTab({ userId }: NotesTabProps) {
         */}
       </div>
       
-      <div key={refreshKey}>
+      <div key={refreshKey} className="flex-1 overflow-y-auto min-h-0 pb-24 pt-4 px-4 md:px-6 touch-action-pan-y">
         <VoiceNotesList 
           userId={userId} 
           onSelect={setSelectedNote}

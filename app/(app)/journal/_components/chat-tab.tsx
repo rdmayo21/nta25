@@ -131,7 +131,7 @@ export default function ChatTab({ userId }: ChatTabProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto p-4 md:p-6"> 
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 touch-action-pan-y"> 
         <div className="space-y-4">
           {isHistoryLoading ? (
             <div className="text-center text-muted-foreground p-8">Loading history...</div>

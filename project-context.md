@@ -1,8 +1,8 @@
-# Voice Journal - Project Context
+# VoxJournal - Project Context
 
 ## Overview
 
-Voice Journal is a web application that allows users to record, transcribe, and analyze voice notes. It offers a streamlined journaling experience where users can easily capture their thoughts via voice, review transcriptions, and get AI-generated overviews from their recordings. 
+VoxJournal is a web application that allows users to record, transcribe, and analyze voice notes. It offers a streamlined journaling experience where users can easily capture their thoughts via voice, review transcriptions, and get AI-generated overviews from their recordings. 
 
 ## Tech Stack
 

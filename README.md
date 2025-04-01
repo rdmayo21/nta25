@@ -1,4 +1,4 @@
-# Voice Journal App
+# VoxJournal App
 
 A mobile web app for voice journaling with AI-powered features.
 
@@ -31,7 +31,7 @@ A mobile web app for voice journaling with AI-powered features.
 1. Clone the repository
 ```bash
 git clone <repository-url>
-cd voice-journal-app
+cd VoxJournal
 ```
 
 2. Install dependencies

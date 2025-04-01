@@ -8,6 +8,8 @@ import { chatWithNotesAction } from "@/actions/api-actions"
 import { toast } from "sonner"
 import { getChatMessagesAction, deleteUserChatMessagesAction } from "@/actions/db/chat-messages-actions"
 import { SelectChatMessage } from "@/db/schema"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -144,10 +146,16 @@ export default function ChatTab({ userId }: ChatTabProps) {
                   className={`max-w-[80%] rounded-lg p-3 break-words ${
                     message.role === "user" 
                       ? "bg-primary text-primary-foreground" 
-                      : "bg-muted"
+                      : "bg-muted prose dark:prose-invert"
                   }`}
                 >
-                  {message.content}
+                  {message.role === "assistant" ? (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {message.content}
+                    </ReactMarkdown>
+                  ) : (
+                    message.content
+                  )}
                 </div>
               </div>
             ))
@@ -171,26 +179,15 @@ export default function ChatTab({ userId }: ChatTabProps) {
       <div className="flex-shrink-0 bg-background border-t py-4 px-4 md:px-6">
         {messages.length > 0 && (
           <div className="flex justify-end mb-2">
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" size="sm" disabled={isLoading || isHistoryLoading}>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Clear Chat
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete your chat history.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleClearChat}>Continue</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              disabled={isLoading || isHistoryLoading} 
+              onClick={handleClearChat}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Clear Chat
+            </Button>
           </div>
         )}
         <form onSubmit={handleSubmit} className="flex items-center gap-2">

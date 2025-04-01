@@ -24,7 +24,7 @@ import FloatingThemeButton from "@/components/utilities/floating-theme-button"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Voice Journal",
+  title: "VoxJournal",
   description: "A full-stack web app template.",
   manifest: "/manifest.json",
   icons: {
@@ -36,9 +36,9 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Voice Journal"
+    title: "VoxJournal"
   },
-  applicationName: "Voice Journal",
+  applicationName: "VoxJournal",
   formatDetection: {
     telephone: false
   }
@@ -80,7 +80,7 @@ export default async function RootLayout({
             defaultTheme="system"
             enableSystem
             disableTransitionOnChange={false}
-            storageKey="voice-journal-theme"
+            storageKey="VoxJournal-theme"
           >
             <PostHogUserIdentify />
             <PostHogPageview />

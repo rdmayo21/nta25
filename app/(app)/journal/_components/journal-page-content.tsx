@@ -16,7 +16,7 @@ export default async function JournalPageContent({ userId }: JournalPageContentP
         <NotesTab userId={userId} />
       </TabsContent>
       
-      <TabsContent value="chat" className="flex flex-col flex-1">
+      <TabsContent value="chat" className="flex flex-col flex-1 overflow-hidden">
         <ChatTab userId={userId} />
       </TabsContent>
       

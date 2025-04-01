@@ -1,5 +1,5 @@
 {
-  "name": "voice-journal",
+  "name": "VoxJournal",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -67,8 +67,10 @@
     "react-day-picker": "^8.10.1",
     "react-dom": "^16.8 || ^17.0 || ^18.0 || ^19.0",
     "react-hook-form": "^7.54.1",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^2.1.7",
     "recharts": "^2.15.0",
+    "remark-gfm": "^4.0.1",
     "sonner": "^1.7.1",
     "stripe": "^16.9.0",
     "tailwind-merge": "^2.5.2",

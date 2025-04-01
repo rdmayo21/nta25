@@ -1,6 +1,6 @@
 {
-  "name": "Voice Journal",
-  "short_name": "Voice Journal",
+  "name": "VoxJournal",
+  "short_name": "VoxJournal",
   "description": "A full-stack web app template",
   "start_url": "/",
   "display": "standalone",

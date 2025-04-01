@@ -25,7 +25,7 @@ export default async function AppLayout({
             href="/journal"
             className="text-xl font-bold"
           >
-            Voice Journal
+            VoxJournal
           </Link>
           
           <div className="flex items-center gap-4">

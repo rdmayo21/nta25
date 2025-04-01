@@ -18,7 +18,7 @@ export async function transcribeAudioAction(
     const formData = new FormData()
     formData.append("audio", audioFile)
 
-    const response = await fetch("https://api.deepgram.com/v1/listen?smart_format=true&punctuate=true", {
+    const response = await fetch("https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&punctuate=true", {
       method: "POST",
       headers: {
         Authorization: `Token ${process.env.DEEPGRAM_API_KEY}`

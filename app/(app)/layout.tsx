@@ -2,9 +2,9 @@
 
 import { UserButton } from "@clerk/nextjs"
 import Link from "next/link"
-import { Mic } from "lucide-react"
 import { redirect } from "next/navigation"
 import { auth } from "@clerk/nextjs/server"
+import { ThemeSwitcher } from "@/components/utilities/theme-switcher"
 
 export default async function AppLayout({
   children
@@ -29,14 +29,7 @@ export default async function AppLayout({
           </Link>
           
           <div className="flex items-center gap-4">
-            <Link
-              href="/journal"
-              className="flex items-center gap-2 text-sm font-medium"
-            >
-              <Mic className="h-4 w-4" />
-              Journal
-            </Link>
-            
+            <ThemeSwitcher />
             <UserButton afterSignOutUrl="/login" />
           </div>
         </div>

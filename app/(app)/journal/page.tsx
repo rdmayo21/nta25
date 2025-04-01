@@ -1,26 +1,70 @@
-"use server"
+"use client"
 
-import { Suspense } from "react"
-import { auth } from "@clerk/nextjs/server"
-import { redirect } from "next/navigation"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useState } from "react"
+import { useAuth } from "@clerk/nextjs"
+import { useRouter } from "next/navigation"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Mic, MessageSquare } from "lucide-react"
 import JournalPageContent from "./_components/journal-page-content"
 import PageSkeleton from "./_components/page-skeleton"
+import { motion, AnimatePresence, PanInfo } from "framer-motion"
 
-export default async function JournalPage() {
-  const { userId } = await auth()
-  
-  if (!userId) {
-    redirect("/login")
+export default function JournalPage() {
+  const { userId, isLoaded } = useAuth()
+  const router = useRouter()
+  const [activeTab, setActiveTab] = useState<"notes" | "chat">("notes")
+
+  const swipeThreshold = 50
+  const swipeVelocityThreshold = 0.3
+
+  const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    const { offset, velocity } = info
+    const swipePower = Math.abs(offset.x) * velocity.x
+
+    if (swipePower < -swipeThreshold * swipeVelocityThreshold && offset.x < -swipeThreshold) {
+      setActiveTab("chat")
+    } else if (swipePower > swipeThreshold * swipeVelocityThreshold && offset.x > swipeThreshold) {
+      setActiveTab("notes")
+    }
   }
-  
+
+  if (!isLoaded) {
+    return <PageSkeleton />
+  }
+
+  if (!userId) {
+    router.push("/login")
+    return null
+  }
+
+  const variants = {
+    enter: (direction: number) => ({
+      x: direction > 0 ? "100%" : "-100%",
+      opacity: 0
+    }),
+    center: {
+      zIndex: 1,
+      x: 0,
+      opacity: 1
+    },
+    exit: (direction: number) => ({
+      zIndex: 0,
+      x: direction < 0 ? "100%" : "-100%",
+      opacity: 0
+    })
+  }
+
+  const direction = activeTab === "notes" ? -1 : 1
+
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
-      <Tabs defaultValue="notes" className="flex flex-col h-full flex-1">
-        {/* Tabs header with sticky positioning */}
-        <div className="sticky top-0 z-30 bg-background pt-4 px-4 md:px-6 border-b">
-          <TabsList className="grid w-full grid-cols-2 flex-none">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
+      <Tabs 
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as "notes" | "chat")}
+        className="flex flex-col h-full flex-1"
+      >
+        <div className="sticky top-0 z-30 bg-background pt-4 px-4 md:px-6 border-b flex-none">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="notes" className="flex items-center gap-2">
               <Mic className="h-4 w-4" />
               <span>Notes</span>
@@ -32,12 +76,23 @@ export default async function JournalPage() {
           </TabsList>
         </div>
         
-        {/* Removed the intermediate wrapper div. Suspense/JournalPageContent is now direct child */}
-        {/* TabsContent rendered inside JournalPageContent will inherit flex context */}
-         <Suspense fallback={<PageSkeleton />}>
-           <JournalPageContent userId={userId} />
-         </Suspense>
-
+        <motion.div 
+          className="flex-1 relative overflow-hidden"
+          drag="x"
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.1}
+          onDragEnd={handleDragEnd}
+        >
+          <AnimatePresence initial={false} custom={direction}>
+            <JournalPageContent 
+              key={activeTab}
+              userId={userId} 
+              activeTab={activeTab} 
+              custom={direction}
+              variants={variants}
+            />
+          </AnimatePresence>
+        </motion.div>
       </Tabs>
     </div>
   )

@@ -1,23 +1,35 @@
-"use server"
+"use client"
 
-import { TabsContent } from "@/components/ui/tabs"
+import { motion, Variants } from "framer-motion"
 import NotesTab from "./notes-tab"
 import ChatTab from "./chat-tab"
 
 interface JournalPageContentProps {
   userId: string
+  activeTab: "notes" | "chat"
+  custom: number
+  variants: Variants
 }
 
-export default async function JournalPageContent({ userId }: JournalPageContentProps) {
+export default function JournalPageContent({ 
+  userId, 
+  activeTab, 
+  custom,
+  variants 
+}: JournalPageContentProps) {
   return (
-    <>
-      <TabsContent value="notes">
-        <NotesTab userId={userId} />
-      </TabsContent>
-      
-      <TabsContent value="chat" className="flex flex-col flex-1 overflow-hidden">
-        <ChatTab userId={userId} />
-      </TabsContent>
-    </>
+    <motion.div
+      className="h-full"
+      key={activeTab}
+      custom={custom}
+      variants={variants}
+      initial="enter"
+      animate="center"
+      exit="exit"
+      transition={{ type: "tween", ease: "easeInOut", duration: 0.3 }}
+    >
+      {activeTab === "notes" && <NotesTab userId={userId} />}
+      {activeTab === "chat" && <ChatTab userId={userId} />}
+    </motion.div>
   )
 } 

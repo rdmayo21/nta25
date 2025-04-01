@@ -22,12 +22,25 @@ export default function JournalPage() {
     const swipeDistance = offset.x
     const swipeVelocity = velocity.x
 
+    // Log the raw data and calculated values
+    console.log("Swipe End:", { offset, velocity, swipeDistance, swipeVelocity });
+
     // Swipe Left (Next tab - Chat)
     if (swipeDistance < -swipeThreshold && swipeVelocity < -swipeVelocityThreshold) {
+      console.log("Swipe Left Detected - Switching to Chat");
       setActiveTab("chat")
     // Swipe Right (Previous tab - Notes)
     } else if (swipeDistance > swipeThreshold && swipeVelocity > swipeVelocityThreshold) {
+      console.log("Swipe Right Detected - Switching to Notes");
       setActiveTab("notes")
+    } else {
+      // Log if conditions are not met
+      console.log("Swipe conditions not met:", {
+        isDistanceLeftMet: swipeDistance < -swipeThreshold,
+        isVelocityLeftMet: swipeVelocity < -swipeVelocityThreshold,
+        isDistanceRightMet: swipeDistance > swipeThreshold,
+        isVelocityRightMet: swipeVelocity > swipeVelocityThreshold
+      });
     }
   }
 
@@ -83,8 +96,9 @@ export default function JournalPage() {
           className="flex-1 relative overflow-hidden"
           drag="x"
           dragConstraints={{ left: 0, right: 0 }}
-          dragElastic={0.1}
+          dragElastic={0}
           onDragEnd={handleDragEnd}
+          style={{ touchAction: "pan-x" }}
         >
           <AnimatePresence initial={false} custom={direction}>
             <JournalPageContent 

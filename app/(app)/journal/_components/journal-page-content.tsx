@@ -26,7 +26,7 @@ export default function JournalPageContent({
       initial="enter"
       animate="center"
       exit="exit"
-      transition={{ type: "tween", ease: "easeInOut", duration: 0.3 }}
+      transition={{ type: "tween", ease: "linear", duration: 0.3 }}
     >
       {activeTab === "notes" && <NotesTab userId={userId} />}
       {activeTab === "chat" && <ChatTab userId={userId} />}

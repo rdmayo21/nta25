@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { toast } from "sonner"
 import { chatWithNotesAction } from "@/actions/api-actions"
-import { createChatMessageAction, getChatMessagesAction, deleteChatMessagesAction } from "@/actions/db/chat-messages-actions"
+import { createChatMessageAction, getChatMessagesAction, deleteUserChatMessagesAction } from "@/actions/db/chat-messages-actions"
 import { SelectChatMessage } from "@/db/schema"
 
 interface ChatInterfaceProps {
@@ -86,7 +86,7 @@ export default function ChatInterface({ userId }: ChatInterfaceProps) {
       // Get AI response
       const aiResponseResult = await chatWithNotesAction(userMessage.content)
       
-      if (!aiResponseResult.isSuccess || !aiResponseResult.response) {
+      if (!aiResponseResult.isSuccess || !aiResponseResult.data) {
         toast.error(aiResponseResult.message || "Failed to get response")
         return
       }
@@ -94,7 +94,7 @@ export default function ChatInterface({ userId }: ChatInterfaceProps) {
       // Save AI message to database
       const aiMessageResult = await createChatMessageAction({
         userId,
-        content: aiResponseResult.response,
+        content: aiResponseResult.data,
         role: "assistant"
       })
       
@@ -106,7 +106,7 @@ export default function ChatInterface({ userId }: ChatInterfaceProps) {
         const aiMessage: SelectChatMessage = {
           id: (Date.now() + 1).toString(), // Temporary ID
           userId,
-          content: aiResponseResult.response,
+          content: aiResponseResult.data,
           role: "assistant",
           createdAt: new Date(),
           updatedAt: new Date()
@@ -125,7 +125,7 @@ export default function ChatInterface({ userId }: ChatInterfaceProps) {
   const handleClearChat = async () => {
     try {
       setIsLoading(true)
-      const result = await deleteChatMessagesAction(userId)
+      const result = await deleteUserChatMessagesAction(userId)
       
       if (result.isSuccess) {
         setMessages([])

@@ -24,7 +24,6 @@ VoxJournal is a web application that allows users to record, transcribe, and ana
 4.  **Note Overview**: AI-powered generation of a concise overview for each note
 5.  **Favorites**: Mark voice notes as favorites for easy access
 6.  **Chat Interface**: Interact with your journal entries via chat
-7.  **Insights Analysis**: Get overall analysis of trends and patterns in your journaling
 
 ## Project Structure
 
@@ -42,7 +41,6 @@ VoxJournal is a web application that allows users to record, transcribe, and ana
 │   │   │   ├── _components/ # Journal-specific components
 │   │   │   │   ├── notes-tab.tsx      # Voice notes tab
 │   │   │   │   ├── chat-tab.tsx       # Chat interface tab
-│   │   │   │   ├── insights-tab.tsx   # Insights analysis tab
 │   │   │   │   └── journal-page-content.tsx # Main content wrapper
 │   │   │   └── page.tsx     # Journal page component
 │   ├── (auth)/              # Authentication routes
@@ -158,7 +156,6 @@ Displays the list of voice notes with options to:
 The main journal interface is divided into three tabs:
 1.  **Notes**: For recording and reviewing/editing voice notes.
 2.  **Chat**: For conversational interaction with journal content.
-3.  **Insights**: For analysis and patterns across all journal entries.
 
 ## Current Issues and Considerations (Updated)
 
@@ -193,7 +190,7 @@ The app relies on several environment variables:
 ## Potential Future Features
 
 1. **Enhanced Analytics**: More detailed analysis of journaling patterns and mood
-2. **Multi-language Support**: Transcription and insights in multiple languages
+2. **Multi-language Support**: Transcription in multiple languages
 3. **Collaboration**: Shared journaling spaces for teams or partners
 4. **Integration with Calendar**: Connecting journal entries to calendar events
 5. **Voice Commands**: Control the app using voice commands

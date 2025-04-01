@@ -3,7 +3,6 @@
 import { TabsContent } from "@/components/ui/tabs"
 import NotesTab from "./notes-tab"
 import ChatTab from "./chat-tab"
-import InsightsTab from "./insights-tab"
 
 interface JournalPageContentProps {
   userId: string
@@ -18,10 +17,6 @@ export default async function JournalPageContent({ userId }: JournalPageContentP
       
       <TabsContent value="chat" className="flex flex-col flex-1 overflow-hidden">
         <ChatTab userId={userId} />
-      </TabsContent>
-      
-      <TabsContent value="insights">
-        <InsightsTab userId={userId} />
       </TabsContent>
     </>
   )
